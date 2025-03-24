@@ -1,0 +1,3 @@
+[submodule "sdk/omw"]
+	path = sdk/omw
+	url = https://github.com/oblaser/omw.git

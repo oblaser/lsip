@@ -17,8 +17,8 @@ set(CMAKE_CXX_STANDARD_REQUIRED true)
 #
 
 # omw
-#add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/../../sdk/omw/build/cmake/libomw.a/ ${CMAKE_CURRENT_LIST_DIR}/../../sdk/omw/build/cmake/libomw.a/)
-#include_directories(../../sdk/omw/include)
+add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/../../sdk/omw/build/cmake/libomw.a/ ${CMAKE_CURRENT_LIST_DIR}/../../sdk/omw/build/cmake/libomw.a/)
+include_directories(../../sdk/omw/include)
 
 
 
@@ -41,7 +41,7 @@ set(SOURCES
 
 
 add_executable(${BINNAME} ${SOURCES})
-#target_link_libraries(${BINNAME} omw)
+target_link_libraries(${BINNAME} omw)
 target_compile_options(${BINNAME} PRIVATE -Werror=implicit
     -Wall
     -Werror=int-conversion

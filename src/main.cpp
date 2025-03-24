@@ -6,14 +6,53 @@ copyright       GPL-3.0 - Copyright (c) 2025 Oliver Blaser
 
 #include <iomanip>
 #include <iostream>
+#include <string>
+#include <vector>
 
 #include "project.h"
+
+#include <omw/cli.h>
+#include <omw/windows/windows.h>
 
 
 using std::cout;
 using std::endl;
 using std::setw;
 
+
+namespace argstr {
+
+const char* const noColor = "--no-color";
+const char* const help = "--help";
+const char* const version = "--version";
+
+bool contains(const std::vector<std::string>& rawArgs, const char* arg)
+{
+    bool r = false;
+
+    for (size_t i = 0; i < rawArgs.size(); ++i)
+    {
+        if (rawArgs[i] == arg)
+        {
+            r = true;
+            break;
+        }
+    }
+
+    return r;
+}
+
+bool isOption(const std::string& arg) { return (!arg.empty()) && (arg[0] == '-'); }
+
+bool isKnownOption(const std::string& arg) { return ((arg == noColor) || (arg == help) || (arg == version)); }
+
+bool check(const std::vector<std::string>& args);
+
+} // namespace argstr
+
+
+
+namespace {
 
 enum EXITCODE // https://tldp.org/LDP/abs/html/exitcodes.html / on MSW are no preserved codes
 {
@@ -31,13 +70,181 @@ enum EXITCODE // https://tldp.org/LDP/abs/html/exitcodes.html / on MSW are no pr
 };
 static_assert(EC__end_ <= EC__max_, "too many error codes defined");
 
+const std::string usageString = std::string(prj::exeName) + " [options] ADDR";
+
+void printHelp()
+{
+    constexpr int lw = 20;
+
+    cout << prj::appName << endl;
+    cout << endl;
+    cout << "Usage:" << endl;
+    cout << "  " << usageString << endl;
+    cout << endl;
+    cout << "ADDR:" << endl;
+    cout << "  IPv4 address range to scan, specified by subnet mask or range." << endl;
+    cout << "  192.168.1.0/24" << endl;
+    cout << "  192.168.1.0-254" << endl;
+    cout << endl;
+    cout << "Options:" << endl;
+    cout << std::left << setw(lw) << std::string("  ") + argstr::noColor << "monochrome console output" << endl;
+    cout << std::left << setw(lw) << std::string("  ") + argstr::help << "prints this help text" << endl;
+    cout << std::left << setw(lw) << std::string("  ") + argstr::version << "prints version info" << endl;
+    cout << endl;
+    cout << "Website: <" << prj::website << ">" << endl;
+}
+
+void printUsageAndTryHelp()
+{
+    cout << "Usage: " << usageString << "\n\n";
+    cout << "Try '" << prj::exeName << " --help' for more options." << endl;
+}
+
+void printVersion()
+{
+    const omw::Version& v = prj::version;
+
+    cout << prj::appName << "   ";
+    if (v.isPreRelease()) { cout << omw::fgBrightMagenta; }
+    cout << v.toString();
+    if (v.isPreRelease()) { cout << omw::defaultForeColor; }
+#ifdef PRJ_DEBUG
+    cout << "   " << omw::fgBrightRed << "DEBUG" << omw::defaultForeColor << "   " << __DATE__ << " " << __TIME__;
+#endif
+    cout << endl;
+
+    cout << endl;
+    cout << "project page: " << prj::website << endl;
+    cout << endl;
+    cout << "Copyright (c) " << prj::copyrightYear << " Oliver Blaser." << endl;
+    cout << "License: GNU GPLv3 <http://gnu.org/licenses/>." << endl;
+    cout << "This is free software. There is NO WARRANTY." << endl;
+}
+
+} // namespace
+
 
 
 int main(int argc, char** argv)
 {
+    std::vector<std::string> rawArgs(argc);
+    for (int i = 0; i < argc; ++i) { rawArgs[i] = argv[i]; }
+
+#ifndef PRJ_DEBUG
+    const
+#endif // PRJ_DEBUG
+        auto args = std::vector<std::string>(rawArgs.begin() + 1, rawArgs.end());
+
+#if PRJ_DEBUG && 1
+    if (args.empty())
+    {
+        // args.push_back("--no-color");
+        // args.push_back("--help");
+        // args.push_back("--version");
+
+        // args.push_back("192.168.1.125");
+
+        // args.push_back("192.168.1.0/24");
+        // args.push_back("192.168.1.0/25");
+
+        args.push_back("192.168.1.80-99");
+    }
+#endif
+
+    if (argstr::contains(args, argstr::noColor)) { omw::ansiesc::disable(); }
+    else
+    {
+        const bool envt =
+#ifdef OMW_PLAT_WIN
+            omw::windows::consoleEnVirtualTermProc();
+#else
+            true;
+#endif
+        omw::ansiesc::enable(envt);
+    }
+
+#ifdef OMW_PLAT_WIN
+    const auto winOutCodePage = omw::windows::consoleGetOutCodePage();
+    bool winOutCodePageRes = omw::windows::consoleSetOutCodePage(omw::windows::UTF8CP);
+#endif
+
+
+
     int r = EC_ERROR;
 
-    cout << "test" << endl;
+    if (/*args.isValid()*/ argstr::check(args))
+    {
+        r = EC_OK;
+
+        if (argstr::contains(args, argstr::help)) { printHelp(); }
+        else if (argstr::contains(args, argstr::version)) { printVersion(); }
+        else { cout << "scanning " << args.back() << endl; }
+    }
+    // else
+    //{
+    //     r = EC_ERROR;
+    //
+    //    if (args.count() == 0)
+    //    {
+    //        cout << "No arguments." << endl;
+    //        printUsageAndTryHelp();
+    //    }
+    //    else if (!args.options().isValid())
+    //    {
+    //        cout << prj::exeName << ": unrecognized option: '" << args.options().unrecognized() << "'" << endl;
+    //        printUsageAndTryHelp();
+    //    }
+    //    else
+    //    {
+    //        cout << "Error" << endl;
+    //        printUsageAndTryHelp();
+    //    }
+    //}
+
+
+
+#if defined(PRJ_DEBUG) && 1
+    cout << omw::foreColor(26) << "===============\nreturn " << r << "\npress enter..." << omw::normal << endl;
+#ifdef OMW_PLAT_WIN
+    int dbg___getc_ = getc(stdin);
+#endif
+#endif
+
+    cout << omw::normal << std::flush;
+
+#ifdef OMW_PLAT_WIN
+    winOutCodePageRes = omw::windows::consoleSetOutCodePage(winOutCodePage);
+#endif
 
     return r;
+}
+
+
+
+bool argstr::check(const std::vector<std::string>& args)
+{
+    bool ok = true;
+
+    if (!args.empty())
+    {
+        for (size_t i = 0; ok && (i < args.size()); ++i)
+        {
+            const auto& arg = args[i];
+
+            if (!argstr::isKnownOption(arg) && argstr::isOption(arg))
+            {
+                ok = false;
+
+                cout << "unknown option: " << arg << endl;
+            }
+        }
+    }
+
+    if (!ok)
+    {
+        cout << endl;
+        printUsageAndTryHelp();
+    }
+
+    return ok;
 }

@@ -9,6 +9,7 @@ copyright       GPL-3.0 - Copyright (c) 2025 Oliver Blaser
 #include <string>
 #include <vector>
 
+#include "application/process.h"
 #include "project.h"
 
 #include <omw/cli.h>
@@ -82,9 +83,9 @@ void printHelp()
     cout << "  " << usageString << endl;
     cout << endl;
     cout << "ADDR:" << endl;
-    cout << "  IPv4 address range to scan, specified by subnet mask or range." << endl;
-    cout << "  192.168.1.0/24" << endl;
-    cout << "  192.168.1.0-254" << endl;
+    cout << "  IPv4 address range to scan, specified by subnet mask or range:" << endl;
+    cout << "   - 192.168.1.0 = 192.168.1.0/24" << endl;
+    cout << "   - 192.168.1.200-254/26 or 192.168.3.0-4.255 etc." << endl;
     cout << endl;
     cout << "Options:" << endl;
     cout << std::left << setw(lw) << std::string("  ") + argstr::noColor << "monochrome console output" << endl;
@@ -142,12 +143,20 @@ int main(int argc, char** argv)
         // args.push_back("--help");
         // args.push_back("--version");
 
-        // args.push_back("192.168.1.125");
+        // args.push_back("192.168.1.0"); // help example
+        // args.push_back("192.168.1.0/24"); // help example
+        // args.push_back("192.168.1.200-254/26"); // help example
+        // args.push_back("192.168.3.0-4.255"); // help example
+
+        // args.push_back("192.168.1.99");
 
         // args.push_back("192.168.1.0/24");
-        // args.push_back("192.168.1.0/25");
+        // args.push_back("192.168.1.0/26");
 
         args.push_back("192.168.1.80-99");
+        // args.push_back("192.168.3.253-5.3");
+        // args.push_back("192.168.3.253-5.3/24");
+        // args.push_back("192.168.10.0-11.255");
     }
 #endif
 
@@ -168,6 +177,12 @@ int main(int argc, char** argv)
     bool winOutCodePageRes = omw::windows::consoleSetOutCodePage(omw::windows::UTF8CP);
 #endif
 
+#if PRJ_DEBUG && 1
+    cout << omw::foreColor(26) << "--======# args #======--\n";
+    for (size_t i = 0; i < args.size(); ++i) { cout << " " << args[i] << endl; }
+    cout << "--======# end args #======--" << endl << omw::defaultForeColor;
+#endif
+
 
 
     int r = EC_ERROR;
@@ -178,7 +193,11 @@ int main(int argc, char** argv)
 
         if (argstr::contains(args, argstr::help)) { printHelp(); }
         else if (argstr::contains(args, argstr::version)) { printVersion(); }
-        else { cout << "scanning " << args.back() << endl; }
+        else
+        {
+            const int err = app::process(args.back());
+            if (err) { r = EC_ERROR; }
+        }
     }
     // else
     //{
@@ -203,7 +222,7 @@ int main(int argc, char** argv)
 
 
 
-#if defined(PRJ_DEBUG) && 1
+#if PRJ_DEBUG && 1
     cout << omw::foreColor(26) << "===============\nreturn " << r << "\npress enter..." << omw::normal << endl;
 #ifdef OMW_PLAT_WIN
     int dbg___getc_ = getc(stdin);
@@ -223,10 +242,12 @@ int main(int argc, char** argv)
 
 bool argstr::check(const std::vector<std::string>& args)
 {
-    bool ok = true;
+    bool ok = false;
 
     if (!args.empty())
     {
+        ok = true;
+
         for (size_t i = 0; ok && (i < args.size()); ++i)
         {
             const auto& arg = args[i];

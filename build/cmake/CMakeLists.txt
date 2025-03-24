@@ -35,6 +35,9 @@ endif()
 include_directories(../../src/)
 
 set(SOURCES
+    ../../src/application/process.cpp
+    ../../src/middleware/ip-addr.cpp
+    ../../src/middleware/mac-addr.cpp
     ../../src/main.cpp
 )
 

@@ -17,9 +17,38 @@ namespace mac {
 class Address
 {
 public:
-    Address() noexcept(true) {}
+    Address() noexcept(true)
+        : m_buffer{ 0, 0, 0, 0, 0, 0 }
+    {}
+
+    Address(const uint8_t* mac) noexcept(true)
+        : m_buffer{ 0, 0, 0, 0, 0, 0 }
+    {
+        for (size_t i = 0; i < this->size(); ++i) { m_buffer[i] = *(mac + i); }
+    }
 
     virtual ~Address() {}
+
+    uint8_t* data() { return m_buffer; }
+    const uint8_t* data() const { return m_buffer; }
+    static constexpr size_t size() { return bufferSize; }
+
+    uint8_t& operator[](std::size_t idx) { return m_buffer[idx]; }
+    const uint8_t& operator[](std::size_t idx) const { return m_buffer[idx]; }
+
+    bool getIG() const { return ((m_buffer[0] & 0x01) != 0); } ///< Returns the nI/G bit.
+    bool getUL() const { return ((m_buffer[0] & 0x02) != 0); } ///< Returns the nU/L bit.
+
+    bool isIndividual() const { return !getIG(); }
+    bool isGroup() const { return getIG(); }
+    bool isUniversal() const { return !getUL(); }
+    bool isLocal() const { return getUL(); }
+
+    std::string toString() const;
+
+private:
+    static constexpr size_t bufferSize = 6;
+    uint8_t m_buffer[bufferSize];
 };
 
 } // namespace mac

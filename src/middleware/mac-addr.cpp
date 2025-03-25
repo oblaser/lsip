@@ -11,3 +11,7 @@ copyright       GPL-3.0 - Copyright (c) 2025 Oliver Blaser
 #include "mac-addr.h"
 
 #include <omw/string.h>
+
+
+
+std::string mac::Address::toString() const { return omw::toHexStr(this->data(), this->size(), '-'); }

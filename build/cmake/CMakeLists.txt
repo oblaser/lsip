@@ -36,6 +36,9 @@ include_directories(../../src/)
 
 set(SOURCES
     ../../src/application/process.cpp
+    ../../src/application/result.cpp
+    ../../src/application/scan.cpp
+    ../../src/middleware/cli.cpp
     ../../src/middleware/ip-addr.cpp
     ../../src/middleware/mac-addr.cpp
     ../../src/main.cpp

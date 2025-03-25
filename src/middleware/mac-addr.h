@@ -21,10 +21,13 @@ public:
         : m_buffer{ 0, 0, 0, 0, 0, 0 }
     {}
 
-    Address(const uint8_t* mac) noexcept(true)
+    explicit Address(const uint8_t* mac) noexcept(true)
         : m_buffer{ 0, 0, 0, 0, 0, 0 }
     {
-        for (size_t i = 0; i < this->size(); ++i) { m_buffer[i] = *(mac + i); }
+        if (mac)
+        {
+            for (size_t i = 0; i < this->size(); ++i) { m_buffer[i] = *(mac + i); }
+        }
     }
 
     virtual ~Address() {}

@@ -124,12 +124,18 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="..\..\src\application\process.cpp" />
+    <ClCompile Include="..\..\src\application\result.cpp" />
+    <ClCompile Include="..\..\src\application\scan.cpp" />
     <ClCompile Include="..\..\src\main.cpp" />
+    <ClCompile Include="..\..\src\middleware\cli.cpp" />
     <ClCompile Include="..\..\src\middleware\ip-addr.cpp" />
     <ClCompile Include="..\..\src\middleware\mac-addr.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\src\application\process.h" />
+    <ClInclude Include="..\..\src\application\result.h" />
+    <ClInclude Include="..\..\src\application\scan.h" />
+    <ClInclude Include="..\..\src\middleware\cli.h" />
     <ClInclude Include="..\..\src\middleware\ip-addr.h" />
     <ClInclude Include="..\..\src\middleware\mac-addr.h" />
     <ClInclude Include="..\..\src\project.h" />

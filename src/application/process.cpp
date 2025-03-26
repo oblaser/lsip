@@ -154,18 +154,17 @@ int getRange(std::vector<ip::Addr4>& range, const std::string& argAddrRange)
         {
             start = argAddrRange.substr(0, slashPos);
 
-            if (mask == ip::SubnetMask4::max)
+            // if no subnet mask is set and the last octet is 0, assume /24 subnet mask (does not catch all cases, but the most common)
+            if ((mask == ip::SubnetMask4::max) && (start.octetLow() == 0))
             {
-                if (start.octetLow() == 0)
-                {
-                    mask = ip::SubnetMask4(24);
-                    printMaskAssumeInfo(mask);
+                mask = ip::SubnetMask4(24);
+                printMaskAssumeInfo(mask);
 
-                    count = ~mask.value() + 1;
-                    static_assert(sizeof(count) == sizeof(ip::SubnetMask4::value_type));
-                }
+                count = ~mask.value() + 1;
+                static_assert(sizeof(count) == sizeof(ip::SubnetMask4::value_type));
             }
 
+            // if no subnet mask is set at this point, it's one single IP address
             if (mask == ip::SubnetMask4::max)
             {
                 mask = ip::SubnetMask4(8);
@@ -173,10 +172,16 @@ int getRange(std::vector<ip::Addr4>& range, const std::string& argAddrRange)
 
                 count = 1;
             }
-            else
+            else if (start.octetLow() == 0)
             {
                 count = ~mask.value() + 1;
                 static_assert(sizeof(count) == sizeof(ip::SubnetMask4::value_type));
+            }
+            else
+            {
+                const uint32_t end = (start | ~mask).value();
+                count = end - start.value() + 1;
+                static_assert(sizeof(count) == sizeof(end));
             }
         }
     }

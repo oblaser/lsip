@@ -47,29 +47,36 @@ int app::process(const std::string& argAddrRange)
 
 
 
-    // cout << endl;
-    // cout << " IP                 MAC                  Vendor" << endl;
     cout << endl;
-    // cout << " ===============    =================    ===============" << endl;
-    //  _    " 192.168.100.800    00-80-41-ae-fd-7e    asdf";
 
     for (size_t i = 0; i < range.size(); ++i)
     {
         const auto result = app::scan(range[i]);
 
-        if (result.ip() != ip::Addr4::null)
+        if (result.hostFound())
         {
-            const std::string vendor = "";
-
             cout << " " << std::left << std::setw(15) << result.ip().toString();
             cout << "  " << std::left << std::setw(17) << result.mac().toString();
             cout << "  " << std::right << std::setw(4) << result.duration() << "ms";
-            cout << "  " << vendor;
+
+            if (result.knownVendor())
+            {
+                if (result.vendor().hasColour())
+                {
+                    const auto& col = result.vendor().colour();
+                    cout << omw::foreColor(col);
+                }
+
+                cout << "  " << result.vendor().name();
+                cout << omw::fgDefault;
+            }
+
             cout << endl;
         }
     }
 
     cout << endl;
+
 
 
     return 0;

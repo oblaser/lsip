@@ -30,7 +30,8 @@ class Addr4 : public Address
 {
 public:
     using value_type = uint32_t;
-    static constexpr size_t bit_count = 32;
+    static constexpr size_t octet_count = 4;
+    static constexpr size_t bit_count = octet_count * 8;
 
     static const Addr4 null;      ///< all bits 0
     static const Addr4 max;       ///< all bits 1

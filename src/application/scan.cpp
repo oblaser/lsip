@@ -72,7 +72,7 @@ app::ScanResult impl_scan(const ip::Addr4& addr)
 
     if (arp_res == NO_ERROR)
     {
-        mac::Address mac;
+        mac::Addr mac;
         size_t n = mac.size();
         if (n > (size_t)arp_macSize) { n = (size_t)arp_macSize; }
 
@@ -162,6 +162,10 @@ std::string arpres_to_string(DWORD arp_res)
 
 #else // OMW_PLAT_
 
-ip::Addr4 app_::scan(const ip::Addr4& addr) { return ip::Addr4::null; }
+app::ScanResult impl_scan(const ip::Addr4& addr)
+{
+    // TODO
+    return app::ScanResult(addr, mac::Addr(), 9999);
+}
 
 #endif // OMW_PLAT_

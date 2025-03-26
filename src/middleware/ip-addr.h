@@ -233,17 +233,7 @@ static inline ip::Addr4 operator&(const ip::Addr4& a, const ip::Addr4& b) { retu
 static inline ip::Addr4 operator|(const ip::Addr4& a, const ip::Addr4& b) { return ip::Addr4(a.value() | b.value()); }
 static inline ip::Addr4 operator^(const ip::Addr4& a, const ip::Addr4& b) { return ip::Addr4(a.value() ^ b.value()); }
 
-static inline ip::SubnetMask4 operator~(const ip::SubnetMask4& a) { return ip::SubnetMask4(~a.value()); }
-static inline ip::SubnetMask4 operator&(const ip::SubnetMask4& a, const ip::SubnetMask4& b) { return ip::SubnetMask4(a.value() & b.value()); }
-static inline ip::SubnetMask4 operator|(const ip::SubnetMask4& a, const ip::SubnetMask4& b) { return ip::SubnetMask4(a.value() | b.value()); }
-static inline ip::SubnetMask4 operator^(const ip::SubnetMask4& a, const ip::SubnetMask4& b) { return ip::SubnetMask4(a.value() ^ b.value()); }
-
-static inline ip::Addr4 operator&(const ip::Addr4& a, const ip::SubnetMask4& b) { return ip::Addr4(a.value() & b.value()); }
-static inline ip::Addr4 operator|(const ip::Addr4& a, const ip::SubnetMask4& b) { return ip::Addr4(a.value() | b.value()); }
-static inline ip::Addr4 operator^(const ip::Addr4& a, const ip::SubnetMask4& b) { return ip::Addr4(a.value() ^ b.value()); }
-static inline ip::Addr4 operator&(const ip::SubnetMask4& a, const ip::Addr4& b) { return ip::Addr4(a.value() & b.value()); }
-static inline ip::Addr4 operator|(const ip::SubnetMask4& a, const ip::Addr4& b) { return ip::Addr4(a.value() | b.value()); }
-static inline ip::Addr4 operator^(const ip::SubnetMask4& a, const ip::Addr4& b) { return ip::Addr4(a.value() ^ b.value()); }
+// subnet mask operator overloads do not make sense, they are most likely going to throw because
 
 /// @}
 

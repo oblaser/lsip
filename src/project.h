@@ -18,7 +18,7 @@ const char* const exeName = "lsip"; // eq to the linker setting
 
 const char* const website = "https://github.com/oblaser/lsip";
 
-const omw::Version version(0, 1, 0, "alpha");
+const omw::Version version(0, 1, 0, "alpha.1");
 constexpr int copyrightYear = 2025;
 
 } // namespace prj

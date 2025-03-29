@@ -168,6 +168,16 @@ app::ScanResult impl_scan(const ip::Addr4& addr)
 
     mac::Addr mac;
 
+    static size_t cnt = 0;
+
+    if (cnt == 0) { mac = mac::EUI48(0x1c740d030201); }
+    else if (cnt == 1) { mac = mac::EUI48(0xb827eb030201); }
+    else if (cnt == 2) { mac = mac::EUI48(0x00136A030201); }
+    else if (cnt == 3) { mac = mac::EUI48(0xB8D812600201); }
+    // else if (cnt == ) { mac = mac::EUI48(0x030201); }
+
+    ++cnt;
+
     return app::ScanResult(addr, mac, 9999, app::lookupVendor(mac));
 }
 

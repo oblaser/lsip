@@ -14,6 +14,14 @@ copyright       GPL-3.0 - Copyright (c) 2025 Oliver Blaser
 
 namespace mac {
 
+enum class Type
+{
+    OUI,
+    OUI28,
+    OUI36,
+    CID,
+};
+
 class EUI48
 {
 public:
@@ -71,6 +79,8 @@ public:
     bool isGroup() const { return getIG(); }
     bool isUniversal() const { return !getUL(); }
     bool isLocal() const { return getUL(); }
+
+    bool isCID() const { return ((m_buffer[0] & 0x0F) == 0x0A); }
 
     std::string toString() const;
 

@@ -7,11 +7,14 @@ copyright       GPL-3.0 - Copyright (c) 2025 Oliver Blaser
 #include <iomanip>
 #include <iostream>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include "application/process.h"
+#include "application/vendor-cache.h"
 #include "project.h"
 
+#include <curl-thread/curl.h>
 #include <omw/cli.h>
 #include <omw/windows/windows.h>
 
@@ -71,7 +74,7 @@ enum EXITCODE // https://tldp.org/LDP/abs/html/exitcodes.html / on MSW are no pr
 };
 static_assert(EC__end_ <= EC__max_, "too many error codes defined");
 
-const std::string usageString = std::string(prj::exeName) + " [options] ADDR";
+const std::string usageString = std::string(prj::exeName) + " [options] ADDR [ADDR [ADDR [...]]]";
 
 void printHelp()
 {
@@ -198,8 +201,22 @@ int main(int argc, char** argv)
         else if (argstr::contains(args, argstr::version)) { printVersion(); }
         else
         {
-            const int err = app::process(args.back());
-            if (err) { r = EC_ERROR; }
+            static std::thread thread_curl = std::thread(curl::thread);
+            app::cache::load();
+
+            for (size_t i = 0; i < args.size(); ++i)
+            {
+                const auto& arg = args[i];
+
+                if (!argstr::isOption(arg))
+                {
+                    const int err = app::process(arg);
+                    if (err) { r = EC_ERROR; }
+                }
+            }
+
+            curl::shutdown();
+            thread_curl.join();
         }
     }
     // else

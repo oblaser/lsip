@@ -23,15 +23,15 @@ class Vendor
 {
 public:
     Vendor()
-        : m_name(), m_colour(0, 0, 0, 0)
+        : m_name(), m_colour(0)
     {}
 
     Vendor(const char* name)
-        : m_name(name), m_colour(0, 0, 0, 0)
+        : m_name(name), m_colour(0)
     {}
 
     Vendor(const std::string& name)
-        : m_name(name), m_colour(0, 0, 0, 0)
+        : m_name(name), m_colour(0)
     {}
 
     Vendor(const std::string& name, const omw::Color colour)
@@ -43,7 +43,7 @@ public:
     const std::string& name() const { return m_name; }
     const omw::Color& colour() const { return m_colour; }
 
-    bool hasColour() const { return (m_colour.a() == 0xFF); }
+    bool hasColour() const { return (m_colour.toRGB() != 0); }
 
 private:
     std::string m_name;

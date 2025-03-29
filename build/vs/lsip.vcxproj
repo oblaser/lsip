@@ -127,6 +127,7 @@
     <ClCompile Include="..\..\src\application\process.cpp" />
     <ClCompile Include="..\..\src\application\result.cpp" />
     <ClCompile Include="..\..\src\application\scan.cpp" />
+    <ClCompile Include="..\..\src\application\vendor-cache.cpp" />
     <ClCompile Include="..\..\src\application\vendor-lookup.cpp" />
     <ClCompile Include="..\..\src\main.cpp" />
     <ClCompile Include="..\..\src\middleware\cli.cpp" />
@@ -137,6 +138,7 @@
     <ClInclude Include="..\..\src\application\process.h" />
     <ClInclude Include="..\..\src\application\result.h" />
     <ClInclude Include="..\..\src\application\scan.h" />
+    <ClInclude Include="..\..\src\application\vendor-cache.h" />
     <ClInclude Include="..\..\src\application\vendor-lookup.h" />
     <ClInclude Include="..\..\src\middleware\cli.h" />
     <ClInclude Include="..\..\src\middleware\ip-addr.h" />

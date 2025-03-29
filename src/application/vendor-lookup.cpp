@@ -10,6 +10,7 @@ copyright       GPL-3.0 - Copyright (c) 2025 Oliver Blaser
 #include <string>
 
 #include "application/result.h"
+#include "application/vendor-cache.h"
 #include "middleware/cli.h"
 #include "middleware/mac-addr.h"
 #include "project.h"
@@ -22,12 +23,8 @@ copyright       GPL-3.0 - Copyright (c) 2025 Oliver Blaser
 
 
 
-namespace db = app;
-
-
-
 static app::Vendor cacheLookup(const mac::Addr& mac);
-static db::Vendor onlineLookup(const mac::Addr& mac);
+static app::cache::Vendor onlineLookup(const mac::Addr& mac);
 static omw::Color getVendorColor(const std::string& name);
 
 
@@ -40,7 +37,7 @@ app::Vendor app::lookupVendor(const mac::Addr& mac)
     {
         const auto tmp = onlineLookup(mac);
 
-        // TODO add to cache
+        if (!tmp.name().empty() && (tmp.colour() != 0)) { app::cache::add(tmp); }
 
         vendor = app::Vendor(tmp.name(), getVendorColor(tmp.name()));
     }
@@ -50,101 +47,23 @@ app::Vendor app::lookupVendor(const mac::Addr& mac)
 
 
 
-#ifndef ___REGION_TODO_REMOVE // TODO remove and implement cache
-
-namespace vl // vendor list
-{
-
-struct Vendor
-{
-    Vendor() = delete;
-
-    Vendor(uint64_t _oui, const std::string& _name)
-        : oui(_oui), name(_name), colour(0, 0, 0, 0)
-    {}
-
-    /**
-     * @brief Construct a new Vendor object
-     *
-     * @param _oui
-     * @param _name
-     * @param _colour format: `0x00RRGGBB`
-     */
-    Vendor(uint64_t _oui, const std::string& _name, uint32_t _colour)
-        : oui(_oui), name(_name), colour(_colour)
-    {}
-
-    mac::EUI48 oui;
-    std::string name;
-    omw::Color colour;
-};
-
-constexpr uint32_t col_raspi = 0xC51A4A;
-
-const Vendor ma_l[] = {
-    Vendor(0xB827EB000000, "Raspberry Pi Foundation", col_raspi),
-    Vendor(0x2CCF67000000, "Raspberry Pi (Trading) Ltd", col_raspi),
-    Vendor(0x88A29E000000, "Raspberry Pi (Trading) Ltd", col_raspi),
-    Vendor(0xDCA632000000, "Raspberry Pi Trading Ltd", col_raspi),
-    Vendor(0xD83ADD000000, "Raspberry Pi Trading Ltd", col_raspi),
-    Vendor(0xE45F01000000, "Raspberry Pi Trading Ltd", col_raspi),
-    Vendor(0x28CDC1000000, "Raspberry Pi Trading Ltd", col_raspi),
-
-    Vendor(0x00136A000000, "Hach Lange Sarl"),
-
-    Vendor(0xA8032A000000, "Espressif Inc."),
-};
-
-const Vendor ma_m[] = {
-    Vendor(0xB8D812600000, "Vonger Electronic Technology Co.,Ltd."),
-};
-
-const Vendor ma_s[] = {
-    Vendor(0, ""), // none
-};
-
-constexpr size_t ma_l_size = (sizeof(ma_l) / sizeof(ma_l[0]));
-constexpr size_t ma_m_size = (sizeof(ma_m) / sizeof(ma_m[0]));
-constexpr size_t ma_s_size = (sizeof(ma_s) / sizeof(ma_s[0]));
-
-vl::Vendor get(const mac::Addr& mac)
-{
-    for (size_t i = 0; i < ma_s_size; ++i)
-    {
-        if ((mac & mac::EUI48::oui36_mask) == ma_s[i].oui) { return ma_s[i]; }
-    }
-
-    for (size_t i = 0; i < ma_m_size; ++i)
-    {
-        if ((mac & mac::EUI48::oui28_mask) == ma_m[i].oui) { return ma_m[i]; }
-    }
-
-    for (size_t i = 0; i < ma_l_size; ++i)
-    {
-        if ((mac & mac::EUI48::oui_mask) == ma_l[i].oui) { return ma_l[i]; }
-    }
-
-    return vl::Vendor(0, "");
-}
-
-} // namespace vl
-
-#endif //___REGION_TODO_REMOVE
-
-
-
 app::Vendor cacheLookup(const mac::Addr& mac)
 {
-    const auto v = vl::get(mac);
-    return app::Vendor(v.name, v.colour);
+    const auto v = app::cache::get(mac);
+    return app::Vendor(v.name(), v.colour());
 }
 
-db::Vendor onlineLookup(const mac::Addr& mac)
+app::cache::Vendor onlineLookup(const mac::Addr& mac)
 {
-    db::Vendor vendor;
+    app::cache::Vendor vendor;
 
-#if 0
     const auto req = curl::Request(curl::Method::GET, "https://www.macvendorlookup.com/api/v2/" + mac.toString() + "/json", 30, 90);
+
+#if PRJ_DEBUG && 0
+    std::cout << req.toString() << std::endl;
+#endif
+
+#if 0 // don't enable until cache is implemented
     const auto curlId = curl::queueRequest(req, curl::Priority::normal);
     if (curlId.isValid())
     {
@@ -160,6 +79,8 @@ db::Vendor onlineLookup(const mac::Addr& mac)
     else { std::cout << "curl queue ID: " << curlId.toString() << std::endl; }
 
     if (!vendor.isValid()) { cli::printError("failed to lookup " + mac.toString() + " online"); }
+#else
+    vendor = app::cache::get(mac);
 #endif
 
     return vendor;
@@ -172,11 +93,9 @@ omw::Color getVendorColor(const std::string& name)
     omw::string ___tmp = name;
     const std::string lower = ___tmp.toLower_ascii();
 
-    if (omw::contains(name, "Raspberry Pi")) { c = 0xC51A4A; }
-    else
-    {
-        c.setARGB(0); // no vendor colour
-    }
+    if (omw::contains(lower, "raspberry pi")) { c = 0xc51a4a; }
+    else if (omw::contains(lower, "hach lange")) { c = 0x0098db; }
+    else { c = 0; }
 
     return c;
 }

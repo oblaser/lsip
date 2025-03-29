@@ -1,3 +1,6 @@
 [submodule "sdk/omw"]
 	path = sdk/omw
 	url = https://github.com/oblaser/omw.git
+[submodule "sdk/curl-thread"]
+	path = sdk/curl-thread
+	url = https://github.com/oblaser/curl-thread.git

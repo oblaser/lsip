@@ -153,9 +153,9 @@ int main(int argc, char** argv)
         // args.push_back("192.168.1.0/24");
         // args.push_back("192.168.1.0/26");
 
-        args.push_back("192.168.1.120/24");
+        // args.push_back("192.168.1.120/24");
 
-        // args.push_back("192.168.1.120-126");
+        args.push_back("192.168.1.120-126");
         // args.push_back("192.168.3.253-5.3");
         // args.push_back("10.55.3.253-5.3");
         // args.push_back("192.168.0.253-1.10/24");

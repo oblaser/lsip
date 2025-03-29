@@ -26,15 +26,19 @@ public:
         : m_name(), m_colour(0, 0, 0, 0)
     {}
 
-    explicit Vendor(const mac::Addr& mac)
-        : m_name(), m_colour(0, 0, 0, 0)
-    {
-        this->set(mac);
-    }
+    Vendor(const char* name)
+        : m_name(name), m_colour(0, 0, 0, 0)
+    {}
+
+    Vendor(const std::string& name)
+        : m_name(name), m_colour(0, 0, 0, 0)
+    {}
+
+    Vendor(const std::string& name, const omw::Color colour)
+        : m_name(name), m_colour(colour)
+    {}
 
     virtual ~Vendor() {}
-
-    void set(const mac::Addr& mac);
 
     const std::string& name() const { return m_name; }
     const omw::Color& colour() const { return m_colour; }
@@ -53,8 +57,8 @@ public:
         : m_ip(ip::Addr4::null), m_mac(), m_duration(0), m_vendor()
     {}
 
-    ScanResult(const ip::Addr4& ip, const mac::Addr& mac, uint32_t duration_ms)
-        : m_ip(ip), m_mac(mac), m_duration(duration_ms), m_vendor(mac)
+    ScanResult(const ip::Addr4& ip, const mac::Addr& mac, uint32_t duration_ms, const Vendor& vendor)
+        : m_ip(ip), m_mac(mac), m_duration(duration_ms), m_vendor(vendor)
     {}
 
     virtual ~ScanResult() {}

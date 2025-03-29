@@ -77,13 +77,13 @@
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <Optimization>Disabled</Optimization>
       <LanguageStandard>stdcpp17</LanguageStandard>
-      <AdditionalIncludeDirectories>$(ProjectDir)../../src;$(ProjectDir)../../sdk/omw/include</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)../../src;$(ProjectDir)../../sdk/curl-thread/include;$(ProjectDir)../../sdk/nlohmann/include;$(ProjectDir)../../sdk/omw/include;$(sdk)/curl/x86/include</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <TargetMachine>MachineX86</TargetMachine>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <SubSystem>Console</SubSystem>
-      <AdditionalDependencies>$(ProjectDir)../../sdk/omw/lib/omw-d.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>$(ProjectDir)../../sdk/omw/lib/omw-d.lib;Normaliz.lib;Ws2_32.lib;Wldap32.lib;Crypt32.lib;advapi32.lib;$(sdk)/curl/x86/lib/libcurl_a.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -93,7 +93,7 @@
       <WarningLevel>Level3</WarningLevel>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <LanguageStandard>stdcpp17</LanguageStandard>
-      <AdditionalIncludeDirectories>$(ProjectDir)../../src;$(ProjectDir)../../sdk/omw/include</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)../../src;$(ProjectDir)../../sdk/curl-thread/include;$(ProjectDir)../../sdk/nlohmann/include;$(ProjectDir)../../sdk/omw/include;$(sdk)/curl/x86/include</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <TargetMachine>MachineX86</TargetMachine>
@@ -101,13 +101,13 @@
       <SubSystem>Console</SubSystem>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
-      <AdditionalDependencies>$(ProjectDir)../../sdk/omw/lib/omw.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>$(ProjectDir)../../sdk/omw/lib/omw.lib;Normaliz.lib;Ws2_32.lib;Wldap32.lib;Crypt32.lib;advapi32.lib;$(sdk)/curl/x86/lib/libcurl_a.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
       <LanguageStandard>stdcpp17</LanguageStandard>
-      <AdditionalIncludeDirectories>$(ProjectDir)../../src;$(ProjectDir)../../sdk/omw/include</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)../../src;$(ProjectDir)../../sdk/curl-thread/include;$(ProjectDir)../../sdk/nlohmann/include;$(ProjectDir)../../sdk/omw/include;$(sdk)/curl/x86/include</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <AdditionalDependencies>$(ProjectDir)../../sdk/omw/lib64/omw-d.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
@@ -116,16 +116,18 @@
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
       <LanguageStandard>stdcpp17</LanguageStandard>
-      <AdditionalIncludeDirectories>$(ProjectDir)../../src;$(ProjectDir)../../sdk/omw/include</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)../../src;$(ProjectDir)../../sdk/curl-thread/include;$(ProjectDir)../../sdk/nlohmann/include;$(ProjectDir)../../sdk/omw/include;$(sdk)/curl/x86/include</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <AdditionalDependencies>$(ProjectDir)../../sdk/omw/lib64/omw.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="..\..\sdk\curl-thread\src\curl.cpp" />
     <ClCompile Include="..\..\src\application\process.cpp" />
     <ClCompile Include="..\..\src\application\result.cpp" />
     <ClCompile Include="..\..\src\application\scan.cpp" />
+    <ClCompile Include="..\..\src\application\vendor-lookup.cpp" />
     <ClCompile Include="..\..\src\main.cpp" />
     <ClCompile Include="..\..\src\middleware\cli.cpp" />
     <ClCompile Include="..\..\src\middleware\ip-addr.cpp" />
@@ -135,6 +137,7 @@
     <ClInclude Include="..\..\src\application\process.h" />
     <ClInclude Include="..\..\src\application\result.h" />
     <ClInclude Include="..\..\src\application\scan.h" />
+    <ClInclude Include="..\..\src\application\vendor-lookup.h" />
     <ClInclude Include="..\..\src\middleware\cli.h" />
     <ClInclude Include="..\..\src\middleware\ip-addr.h" />
     <ClInclude Include="..\..\src\middleware\mac-addr.h" />

@@ -16,6 +16,13 @@ set(CMAKE_CXX_STANDARD_REQUIRED true)
 # SDK
 #
 
+# curl-thread
+set(SDK_SOURCES ${SDK_SOURCES} ../../sdk/curl-thread/src/curl.cpp)
+include_directories(../../sdk/curl-thread/include)
+
+# json
+include_directories(../../sdk/nlohmann/include)
+
 # omw
 add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/../../sdk/omw/build/cmake/libomw.a/ ${CMAKE_CURRENT_LIST_DIR}/../../sdk/omw/build/cmake/libomw.a/)
 include_directories(../../sdk/omw/include)
@@ -38,6 +45,7 @@ set(SOURCES
     ../../src/application/process.cpp
     ../../src/application/result.cpp
     ../../src/application/scan.cpp
+    ../../src/application/vendor-lookup.cpp
     ../../src/middleware/cli.cpp
     ../../src/middleware/ip-addr.cpp
     ../../src/middleware/mac-addr.cpp
@@ -46,12 +54,10 @@ set(SOURCES
 
 
 
-add_executable(${BINNAME} ${SOURCES})
-target_link_libraries(${BINNAME} omw)
-target_compile_options(${BINNAME} PRIVATE -Werror=implicit
+add_executable(${BINNAME} ${SDK_SOURCES} ${SOURCES})
+target_link_libraries(${BINNAME} omw curl pthread)
+target_compile_options(${BINNAME} PRIVATE
     -Wall
-    -Werror=int-conversion
-    -Werror=discarded-qualifiers
     -Werror=return-type
     -Werror=format
     -Wdouble-promotion

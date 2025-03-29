@@ -8,6 +8,7 @@ copyright       GPL-3.0 - Copyright (c) 2025 Oliver Blaser
 #include <cstdint>
 
 #include "application/result.h"
+#include "application/vendor-lookup.h"
 #include "middleware/cli.h"
 #include "middleware/ip-addr.h"
 #include "middleware/mac-addr.h"
@@ -25,16 +26,15 @@ static app::ScanResult impl_scan(const ip::Addr4& addr);
 
 app::ScanResult app::scan(const ip::Addr4& addr)
 {
-    app::ScanResult r = impl_scan(addr);
-
-    // r.setVendor(); TODO
-
+    const app::ScanResult r = impl_scan(addr);
     return r;
 }
 
 
 
 #if OMW_PLAT_WIN
+
+
 
 // clang-format off
 // #define WIN32_LEAN_AND_MEAN
@@ -49,13 +49,9 @@ app::ScanResult app::scan(const ip::Addr4& addr)
 #pragma comment(lib, "ws2_32.lib")
 // clang-format on
 
-
-
 static IN_ADDR ip_to_IN_ADDR(const ip::Addr4& addr);
 static inline IPAddr ip_to_IPAddr(const ip::Addr4& addr) { return ip_to_IN_ADDR(addr).S_un.S_addr; }
 static std::string arpres_to_string(DWORD arp_res);
-
-
 
 app::ScanResult impl_scan(const ip::Addr4& addr)
 {
@@ -86,7 +82,7 @@ app::ScanResult impl_scan(const ip::Addr4& addr)
             else { mac[i] = 0; }
         }
 
-        r = app::ScanResult(addr, mac, (uint32_t)(dur_us / 1000));
+        r = app::ScanResult(addr, mac, (uint32_t)((dur_us + 500) / 1000), app::lookupVendor(mac));
     }
     else
     {
@@ -160,12 +156,21 @@ std::string arpres_to_string(DWORD arp_res)
     return str;
 }
 
+
+
 #else // OMW_PLAT_
+
+
 
 app::ScanResult impl_scan(const ip::Addr4& addr)
 {
     // TODO
-    return app::ScanResult(addr, mac::Addr(), 9999);
+
+    mac::Addr mac;
+
+    return app::ScanResult(addr, mac, 9999, app::lookupVendor(mac));
 }
+
+
 
 #endif // OMW_PLAT_

@@ -8,6 +8,7 @@ copyright       GPL-3.0 - Copyright (c) 2025 Oliver Blaser
 #include <iostream>
 #include <stdexcept>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include "application/result.h"
@@ -18,12 +19,17 @@ copyright       GPL-3.0 - Copyright (c) 2025 Oliver Blaser
 #include "process.h"
 #include "project.h"
 
+#include <curl-thread/curl.h>
 #include <omw/cli.h>
 #include <omw/string.h>
 
 
 using std::cout;
 using std::endl;
+
+
+
+static std::thread thread_curl;
 
 
 
@@ -34,8 +40,11 @@ static int getRange(std::vector<ip::Addr4>& range, const std::string& argAddrRan
 
 int app::process(const std::string& argAddrRange)
 {
-    std::vector<ip::Addr4> range;
+    thread_curl = std::thread(curl::thread);
 
+
+
+    std::vector<ip::Addr4> range;
     const int err = getRange(range, argAddrRange);
     if (err) { return -(__LINE__); }
 
@@ -78,6 +87,9 @@ int app::process(const std::string& argAddrRange)
     cout << endl;
 
 
+
+    curl::shutdown();
+    thread_curl.join();
 
     return 0;
 }

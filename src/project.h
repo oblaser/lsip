@@ -15,6 +15,7 @@ namespace prj {
 
 const char* const appName = "lsip";
 const char* const exeName = "lsip"; // eq to the linker setting
+const char* const dirName = "lsip";
 
 const char* const website = "https://github.com/oblaser/lsip";
 

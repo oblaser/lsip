@@ -37,7 +37,13 @@ app::Vendor app::lookupVendor(const mac::Addr& mac)
     {
         const auto tmp = onlineLookup(mac);
 
-        if (!tmp.name().empty() && (tmp.colour() != 0)) { app::cache::add(tmp); }
+        if (!tmp.name().empty())
+        {
+#if PRJ_DEBUG && 1
+            std::cout << "API: (" << mac::toAddrBlockString(tmp.addrBlock()) << ") " << tmp.name() << std::endl;
+#endif
+            app::cache::add(mac, tmp);
+        }
 
         vendor = app::Vendor(tmp.name(), getVendorColor(tmp.name()));
     }
@@ -80,7 +86,42 @@ app::cache::Vendor onlineLookup(const mac::Addr& mac)
 
     if (!vendor.isValid()) { cli::printError("failed to lookup " + mac.toString() + " online"); }
 #else
-    vendor = app::cache::get(mac);
+    mac::Type addrBlock;
+    std::string name;
+
+    if ((mac & mac::EUI48::oui28_mask) == mac::Addr(0xB8D812600000))
+    {
+        addrBlock = mac::Type::OUI28;
+        name = "Vonger Electronic Technology Co.,Ltd.";
+    }
+    else if ((mac & mac::EUI48::oui_mask) == mac::Addr(0xB827EB000000))
+    {
+        addrBlock = mac::Type::OUI;
+        name = "Raspberry Pi Foundation";
+    }
+    else if (((mac & mac::EUI48::oui_mask) == mac::Addr(0x2CCF67000000)) || ((mac & mac::EUI48::oui_mask) == mac::Addr(0x88A29E000000)))
+    {
+        addrBlock = mac::Type::OUI;
+        name = "Raspberry Pi (Trading) Ltd";
+    }
+    else if (((mac & mac::EUI48::oui_mask) == mac::Addr(0xDCA632000000)) || ((mac & mac::EUI48::oui_mask) == mac::Addr(0xD83ADD000000)) ||
+             ((mac & mac::EUI48::oui_mask) == mac::Addr(0xE45F01000000)) || ((mac & mac::EUI48::oui_mask) == mac::Addr(0x28CDC1000000)))
+    {
+        addrBlock = mac::Type::OUI;
+        name = "Raspberry Pi Trading Ltd";
+    }
+    else if ((mac & mac::EUI48::oui_mask) == mac::Addr(0x00136A000000))
+    {
+        addrBlock = mac::Type::OUI;
+        name = "Hach Lange Sarl";
+    }
+    else if ((mac & mac::EUI48::oui_mask) == mac::Addr(0xA8032A000000))
+    {
+        addrBlock = mac::Type::OUI;
+        name = "Espressif Inc.";
+    }
+
+    vendor = app::cache::Vendor(addrBlock, name, getVendorColor(name));
 #endif
 
     return vendor;

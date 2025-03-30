@@ -13,6 +13,8 @@ copyright       GPL-3.0 - Copyright (c) 2025 Oliver Blaser
 
 #include "middleware/mac-addr.h"
 
+#include <omw/color.h>
+
 
 namespace app::cache {
 
@@ -20,44 +22,51 @@ class Vendor
 {
 public:
     Vendor()
-        : m_name(), m_colour(0)
+        : m_addrBlock(mac::Type::CID), m_name(), m_colour(0)
     {}
 
-    Vendor(const char* name)
-        : m_name(name), m_colour(0)
+    Vendor(const mac::Type& addrBlock, const char* name)
+        : m_addrBlock(addrBlock), m_name(name), m_colour(0)
     {}
 
-    Vendor(const std::string& name)
-        : m_name(name), m_colour(0)
+    Vendor(const mac::Type& addrBlock, const std::string& name)
+        : m_addrBlock(addrBlock), m_name(name), m_colour(0)
     {}
 
-    /**
-     * @brief Construct a new Vendor object
-     *
-     * @param name
-     * @param colour format: `0x00RRGGBB`
-     */
-    Vendor(const std::string& name, const uint32_t colour)
-        : m_name(name), m_colour(colour)
+    Vendor(const mac::Type& addrBlock, const std::string& name, const omw::Color& colour)
+        : m_addrBlock(addrBlock), m_name(name), m_colour(colour)
     {}
 
     virtual ~Vendor() {}
 
+    const mac::Type& addrBlock() const { return m_addrBlock; }
     const std::string& name() const { return m_name; }
+    const omw::Color& colour() const { return m_colour; }
 
-    /**
-     * @return format: `0x00RRGGBB`
-     */
-    uint32_t colour() const { return m_colour; }
+    bool empty() const { return m_name.empty(); }
+
+protected:
+    void setName(const std::string& name) { m_name = name; }
+    void setColour(const omw::Color& colour) { m_colour = colour; }
 
 private:
+    mac::Type m_addrBlock;
     std::string m_name;
-    uint32_t m_colour;
+    omw::Color m_colour;
 };
 
 void load();
+void save();
+
 app::cache::Vendor get(const mac::Addr& mac);
-void add(const app::cache::Vendor& vendor);
+
+/**
+ * @brief Adds a new record in the MAC vendor lookup cache-
+ *
+ * @param mac Vendors OUI or any of it's MAC addresses
+ * @param vendor
+ */
+void add(const mac::EUI48& mac, const app::cache::Vendor& vendor);
 
 } // namespace app::cache
 

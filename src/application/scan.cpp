@@ -158,7 +158,7 @@ std::string arpres_to_string(DWORD arp_res)
 
 
 
-#else // OMW_PLAT_
+#else // OMW_PLAT_WIN
 
 
 
@@ -183,4 +183,4 @@ app::ScanResult impl_scan(const ip::Addr4& addr)
 
 
 
-#endif // OMW_PLAT_
+#endif // OMW_PLAT_WIN

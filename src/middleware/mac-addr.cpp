@@ -14,6 +14,60 @@ copyright       GPL-3.0 - Copyright (c) 2025 Oliver Blaser
 
 
 
+std::string mac::toString(const Type& type)
+{
+    std::string str;
+
+    switch (type)
+    {
+    case mac::Type::OUI:
+        str = "OUI";
+        break;
+
+    case mac::Type::OUI28:
+        str = "OUI28";
+        break;
+
+    case mac::Type::OUI36:
+        str = "OUI36";
+        break;
+
+    case mac::Type::CID:
+        str = "CID";
+        break;
+    }
+
+    return str;
+}
+
+std::string mac::toAddrBlockString(const Type& type)
+{
+    std::string str;
+
+    switch (type)
+    {
+    case mac::Type::OUI:
+        str = "MA-L";
+        break;
+
+    case mac::Type::OUI28:
+        str = "MA-M";
+        break;
+
+    case mac::Type::OUI36:
+        str = "MA-S";
+        break;
+
+    case mac::Type::CID:
+        str = "CID";
+        break;
+    }
+
+    return str;
+}
+
+
+
 const mac::EUI48 mac::EUI48::null = mac::EUI48((uint64_t)0);
 const mac::EUI48 mac::EUI48::max = mac::EUI48(0x0000FFFFFFFFFFFFllu);
 const mac::EUI48 mac::EUI48::broadcast = mac::EUI48(0x0000FFFFFFFFFFFFllu);
@@ -39,7 +93,7 @@ void mac::EUI48::set(uint64_t value) noexcept(true)
     m_buffer[5] = (uint8_t)(value);
 }
 
-std::string mac::EUI48::toString() const { return omw::toHexStr(this->data(), this->size(), '-').toLower_ascii(); }
+std::string mac::EUI48::toString(char delimiter) const { return omw::toHexStr(this->data(), this->size(), delimiter).toLower_ascii(); }
 
 
 

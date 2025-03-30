@@ -267,7 +267,7 @@ int getRange(std::vector<ip::Addr4>& range, const std::string& argAddrRange)
 
 
 
-#if PRJ_DEBUG && 1
+#if PRJ_DEBUG && 0
     {
         ip::Addr4 last = ip::Addr4::null;
         for (size_t i = 0; i < range.size(); ++i)

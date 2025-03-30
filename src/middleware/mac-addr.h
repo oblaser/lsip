@@ -16,11 +16,14 @@ namespace mac {
 
 enum class Type
 {
-    OUI,
-    OUI28,
-    OUI36,
-    CID,
+    OUI,   ///< MAC Address Block Large (MA-L)
+    OUI28, ///< MAC Address Block Medium (MA-M)
+    OUI36, ///< MAC Address Block Small (MA-S)
+    CID,   ///< Company ID
 };
+
+std::string toString(const Type& type);
+std::string toAddrBlockString(const Type& type);
 
 class EUI48
 {
@@ -82,7 +85,7 @@ public:
 
     bool isCID() const { return ((m_buffer[0] & 0x0F) == 0x0A); }
 
-    std::string toString() const;
+    std::string toString(char delimiter = '-') const;
 
 
     //! \name Container like members

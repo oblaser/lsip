@@ -169,13 +169,11 @@ int main(int argc, char** argv)
     if (argstr::contains(args, argstr::noColor)) { omw::ansiesc::disable(); }
     else
     {
-        const bool envt =
 #ifdef OMW_PLAT_WIN
-            omw::windows::consoleEnVirtualTermProc();
+        omw::ansiesc::enable(omw::windows::consoleEnVirtualTermProc());
 #else
-            true;
+        omw::ansiesc::enable(true);
 #endif
-        omw::ansiesc::enable(envt);
     }
 
 #ifdef OMW_PLAT_WIN
@@ -201,8 +199,8 @@ int main(int argc, char** argv)
         else if (argstr::contains(args, argstr::version)) { printVersion(); }
         else
         {
-            static std::thread thread_curl = std::thread(curl::thread);
             app::cache::load();
+            std::thread thread_curl = std::thread(curl::thread);
 
             for (size_t i = 0; i < args.size(); ++i)
             {
@@ -217,6 +215,8 @@ int main(int argc, char** argv)
 
             curl::shutdown();
             thread_curl.join();
+
+            app::cache::save();
         }
     }
     // else

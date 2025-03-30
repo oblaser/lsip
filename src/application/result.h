@@ -45,6 +45,8 @@ public:
 
     bool hasColour() const { return (m_colour.toRGB() != 0); }
 
+    bool empty() const { return m_name.empty(); }
+
 private:
     std::string m_name;
     omw::Color m_colour;

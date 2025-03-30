@@ -22,10 +22,14 @@ copyright       GPL-3.0 - Copyright (c) 2025 Oliver Blaser
 #include <omw/string.h>
 
 
+using json = nlohmann::json;
+
+
 
 static app::Vendor cacheLookup(const mac::Addr& mac);
 static app::cache::Vendor onlineLookup(const mac::Addr& mac);
-static omw::Color getVendorColor(const std::string& name);
+static app::cache::Vendor parseApiResponse(const std::string& body);
+static omw::Color getVendorColour(const std::string& name);
 
 
 
@@ -33,19 +37,12 @@ app::Vendor app::lookupVendor(const mac::Addr& mac)
 {
     app::Vendor vendor = cacheLookup(mac);
 
-    if (vendor.name().empty())
+    if (vendor.empty())
     {
         const auto tmp = onlineLookup(mac);
+        if (!tmp.empty()) { app::cache::add(mac, tmp); }
 
-        if (!tmp.name().empty())
-        {
-#if PRJ_DEBUG && 1
-            std::cout << "API: (" << mac::toAddrBlockString(tmp.addrBlock()) << ") " << tmp.name() << std::endl;
-#endif
-            app::cache::add(mac, tmp);
-        }
-
-        vendor = app::Vendor(tmp.name(), getVendorColor(tmp.name()));
+        vendor = app::Vendor(tmp.name(), getVendorColour(tmp.name()));
     }
 
     return vendor;
@@ -63,28 +60,25 @@ app::cache::Vendor onlineLookup(const mac::Addr& mac)
 {
     app::cache::Vendor vendor;
 
+#if 1
     const auto req = curl::Request(curl::Method::GET, "https://www.macvendorlookup.com/api/v2/" + mac.toString() + "/json", 30, 90);
-
-#if PRJ_DEBUG && 0
-    std::cout << req.toString() << std::endl;
-#endif
-
-#if 0 // don't enable until cache is implemented
     const auto curlId = curl::queueRequest(req, curl::Priority::normal);
     if (curlId.isValid())
     {
         while (!curl::responseReady(curlId)) {}
         const auto res = curl::popResponse();
 
-        if (res.good())
+        if (res.good()) { vendor = parseApiResponse(res.body()); }
+        else
         {
-            // TODO parse response
+#if PRJ_DEBUG && 1
+            std::cout << res.toString() << std::endl;
+#endif
         }
-        else { std::cout << res.toString() << std::endl; }
     }
-    else { std::cout << "curl queue ID: " << curlId.toString() << std::endl; }
+    else { cli::printError("curl queue ID: " + curlId.toString()); }
 
-    if (!vendor.isValid()) { cli::printError("failed to lookup " + mac.toString() + " online"); }
+    if (vendor.empty()) { cli::printError("failed to lookup " + mac.toString() + " online"); }
 #else
     mac::Type addrBlock;
     std::string name;
@@ -121,13 +115,42 @@ app::cache::Vendor onlineLookup(const mac::Addr& mac)
         name = "Espressif Inc.";
     }
 
-    vendor = app::cache::Vendor(addrBlock, name, getVendorColor(name));
+    vendor = app::cache::Vendor(addrBlock, name, getVendorColour(name));
 #endif
 
     return vendor;
 }
 
-omw::Color getVendorColor(const std::string& name)
+app::cache::Vendor parseApiResponse(const std::string& body)
+{
+    app::cache::Vendor vendor;
+
+    try
+    {
+        const json j = json::parse(body)[0];
+
+        const std::string name = j["company"];
+        const std::string type = omw::string(j["type"]).toLower_ascii();
+        mac::Type addrBlock;
+
+        if ((type == "oui36") || (type == "ma-s")) { addrBlock = mac::Type::OUI36; }
+        else if ((type == "oui28") || (type == "ma-m")) { addrBlock = mac::Type::OUI28; }
+        else if ((type == "oui24") || (type == "oui") || (type == "ma-l")) { addrBlock = mac::Type::OUI; }
+        else { throw -(__LINE__); }
+
+#if PRJ_DEBUG && 1
+        std::cout << "API: " << type << " => " << mac::toAddrBlockString(addrBlock) << " \"" << name << '"' << std::endl;
+#endif
+
+        vendor = app::cache::Vendor(addrBlock, name, getVendorColour(name));
+    }
+    catch (...)
+    {}
+
+    return vendor;
+}
+
+omw::Color getVendorColour(const std::string& name)
 {
     omw::Color c;
 

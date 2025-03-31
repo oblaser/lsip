@@ -32,6 +32,51 @@ app::ScanResult app::scan(const ip::Addr4& addr)
 
 
 
+#if PRJ_DEBUG
+
+#include <atomic>
+#include <curl-thread/curl.h>
+app::ScanResult impl_scan(const ip::Addr4& addr)
+{
+    // TODO
+
+    omw::clock::timepoint_t dur_us = omw::clock::now();
+
+    mac::Addr mac;
+    static std::atomic<size_t> ___cnt = 0;
+    const size_t cnt = ___cnt;
+    ++___cnt;
+
+#if 0
+    if (cnt == 0) { mac = mac::EUI48(0x1c740d030201); }
+    else if (cnt == 1) { mac = mac::EUI48(0xb827eb030201); }
+    else if (cnt == 2) { mac = mac::EUI48(0x00136A030201); }
+    else if (cnt == 3) { mac = mac::EUI48(0xB8D812600201); }
+    // else if (cnt == ) { mac = mac::EUI48(0x030201); }
+#else
+    // testing intermediate cache
+    if (cnt == 0) { mac = mac::EUI48(0x1c740d030201); }
+    else if (cnt < 5) { mac = mac::EUI48(0xb827eb030201); }
+    else if (cnt < 7) { mac = mac::EUI48(0x00136A030201); }
+    else if (cnt < 8) { mac = mac::EUI48(0xb827eb030201); }
+    else if (cnt < 10) { mac = mac::EUI48(0xB8D812600201); }
+    // else if (cnt == ) { mac = mac::EUI48(0x030201); }
+#endif
+
+#if 0
+    int delay_ms = curl::random(2, 400);
+    // if (addr == ip::Addr4(192, 168, 1, 123)) { delay_ms = 3000; }
+    const auto t = omw::clock::now();
+    while (!omw::clock::elapsed_ms(omw::clock::now(), t, delay_ms)) {}
+#endif
+
+    dur_us = omw::clock::now() - dur_us;
+
+    return app::ScanResult(addr, mac, (uint32_t)((dur_us + 500) / 1000), app::lookupVendor(mac));
+}
+
+#else // PRJ_DEBUG
+
 #if OMW_PLAT_WIN
 
 
@@ -160,41 +205,15 @@ std::string arpres_to_string(DWORD arp_res)
 
 #else // OMW_PLAT_WIN
 
-#if PRJ_DEBUG
-#include <curl-thread/curl.h>
-app::ScanResult impl_scan(const ip::Addr4& addr)
-{
-    // TODO
 
-    omw::clock::timepoint_t dur_us = omw::clock::now();
 
-    mac::Addr mac;
-    static size_t cnt = 0;
-    if (cnt == 0) { mac = mac::EUI48(0x1c740d030201); }
-    else if (cnt == 1) { mac = mac::EUI48(0xb827eb030201); }
-    else if (cnt == 2) { mac = mac::EUI48(0x00136A030201); }
-    else if (cnt == 3) { mac = mac::EUI48(0xB8D812600201); }
-    // else if (cnt == ) { mac = mac::EUI48(0x030201); }
-    ++cnt;
-
-#if 1
-    int delay_ms = curl::random(2, 400);
-    // if (addr == ip::Addr4(192, 168, 1, 123)) { delay_ms = 3000; }
-    const auto t = omw::clock::now();
-    while (!omw::clock::elapsed_ms(omw::clock::now(), t, delay_ms)) {}
-#endif
-
-    dur_us = omw::clock::now() - dur_us;
-
-    return app::ScanResult(addr, mac, (uint32_t)((dur_us + 500) / 1000), app::lookupVendor(mac));
-}
-#else  // PRJ_DEBUG
 app::ScanResult impl_scan(const ip::Addr4& addr)
 {
     // TODO
 }
-#endif // PRJ_DEBUG
 
 
 
 #endif // OMW_PLAT_WIN
+
+#endif // PRJ_DEBUG

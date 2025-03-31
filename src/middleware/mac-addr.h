@@ -22,8 +22,15 @@ enum class Type
     CID,   ///< Company ID
 };
 
-std::string toString(const Type& type);
-std::string toAddrBlockString(const Type& type);
+/**
+ * Returns the string representation of `mac::Type` in the OUI format (e.g. `OUI36`).
+ */
+std::string toString(const mac::Type& type);
+
+/**
+ * Returns the string representation of `mac::Type` in the MAC Address Block format (e.g. `MA-S`).
+ */
+std::string toAddrBlockString(const mac::Type& type);
 
 class EUI48
 {

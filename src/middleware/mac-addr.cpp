@@ -14,7 +14,7 @@ copyright       GPL-3.0 - Copyright (c) 2025 Oliver Blaser
 
 
 
-std::string mac::toString(const Type& type)
+std::string mac::toString(const mac::Type& type)
 {
     std::string str;
 
@@ -40,7 +40,7 @@ std::string mac::toString(const Type& type)
     return str;
 }
 
-std::string mac::toAddrBlockString(const Type& type)
+std::string mac::toAddrBlockString(const mac::Type& type)
 {
     std::string str;
 

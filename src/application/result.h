@@ -22,26 +22,36 @@ namespace app {
 class Vendor
 {
 public:
+    using source_type = char;
+    class Source
+    {
+    public:
+        static constexpr char api = 'a';
+        static constexpr char cache = 'c';
+    };
+
+public:
     Vendor()
-        : m_name(), m_colour(0)
+        : m_name(), m_colour(0), m_source('-')
     {}
 
-    Vendor(const char* name)
-        : m_name(name), m_colour(0)
+    Vendor(const source_type& source, const char* name)
+        : m_name(name), m_colour(0), m_source(source)
     {}
 
-    Vendor(const std::string& name)
-        : m_name(name), m_colour(0)
+    Vendor(const source_type& source, const std::string& name)
+        : m_name(name), m_colour(0), m_source(source)
     {}
 
-    Vendor(const std::string& name, const omw::Color colour)
-        : m_name(name), m_colour(colour)
+    Vendor(const source_type& source, const std::string& name, const omw::Color colour)
+        : m_name(name), m_colour(colour), m_source(source)
     {}
 
     virtual ~Vendor() {}
 
     const std::string& name() const { return m_name; }
     const omw::Color& colour() const { return m_colour; }
+    const source_type& source() const { return m_source; }
 
     bool hasColour() const { return (m_colour.toRGB() != 0); }
 
@@ -50,6 +60,7 @@ public:
 private:
     std::string m_name;
     omw::Color m_colour;
+    source_type m_source;
 };
 
 class ScanResult

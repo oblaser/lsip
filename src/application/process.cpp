@@ -219,15 +219,19 @@ void printResult(const app::ScanResult& result)
     ss << "  " << std::right << std::setw(4) << result.duration() << "ms";
 
     const auto& vendor = result.vendor();
-    if (!vendor.empty())
+    if (!vendor.empty() /* && TODO cli option */)
     {
+        ss << "  ";
+
+        if (true /* TODO cli option */) { ss << omw::fgBrightBlack << '[' << vendor.source() << ']' << omw::fgDefault; }
+
         if (vendor.hasColour())
         {
             const auto& col = vendor.colour();
             ss << omw::foreColor(col);
         }
 
-        ss << "  " << vendor.name();
+        ss << ' ' << vendor.name();
         ss << omw::fgDefault;
     }
 

@@ -56,11 +56,12 @@ app::ScanResult impl_scan(const ip::Addr4& addr)
 #else
     // testing intermediate cache
     if (cnt == 0) { mac = mac::EUI48(0x1c740d030201); }
-    else if (cnt < 5) { mac = mac::EUI48(0xb827eb030201); }
-    else if (cnt < 7) { mac = mac::EUI48(0x00136A030201); }
-    else if (cnt < 8) { mac = mac::EUI48(0xb827eb030201); }
-    else if (cnt < 10) { mac = mac::EUI48(0xB8D812600201); }
+    else if (cnt < 10) { mac = mac::EUI48(0xb827eb030201); }
+    else if (cnt < 12) { mac = mac::EUI48(0x00136A030201); }
+    else if (cnt < 13) { mac = mac::EUI48(0xb827eb030201); }
+    else if (cnt < 15) { mac = mac::EUI48(0xB8D812600201); }
     // else if (cnt == ) { mac = mac::EUI48(0x030201); }
+    else if (cnt > 25) { ___cnt = 0; }
 #endif
 
 #if 0

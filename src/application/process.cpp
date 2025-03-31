@@ -121,6 +121,7 @@ static Queue queue;
 
 
 
+static void sleep_ms(uint16_t t_ms);
 static void scanThread();
 static void printMaskAssumeInfo(const ip::SubnetMask4& mask);
 static void printResult(const app::ScanResult& result);
@@ -148,29 +149,23 @@ int app::process(const std::string& argAddrRange)
 
     do {
         const size_t thCount = queue.thCount();
-        if ((queue.remaining() != 0) && (thCount < Queue::maxThCount))
+        const size_t remaining = queue.remaining();
+        if ((remaining != 0) && (thCount < Queue::maxThCount))
         {
             std::thread th(scanThread);
             th.detach();
-            while (queue.thCount() == thCount) {} // wait until the thread has started and popped the IP
+            while (queue.remaining() == remaining) { sleep_ms(1); } // wait until the thread has started and popped the IP
         }
 
-        uint16_t sleep_ms = 100;
-        const auto res = queue.popRes();
+        uint16_t threadSleep = 10;
+        auto res = queue.popRes();
         if (!res.empty())
         {
             printResult(res);
-            sleep_ms = 1;
+            threadSleep = 1;
         }
 
-#if OMW_PLAT_WIN
-        Sleep(sleep_ms);
-#else
-        struct timespec ts;
-        ts.tv_sec = 0;
-        ts.tv_nsec = ((int32_t)sleep_ms * 1000);
-        nanosleep(&ts, NULL);
-#endif
+        sleep_ms(threadSleep);
     }
     while (!queue.done());
 
@@ -182,6 +177,18 @@ int app::process(const std::string& argAddrRange)
 }
 
 
+
+void sleep_ms(uint16_t t_ms)
+{
+#if OMW_PLAT_WIN
+    Sleep(t_ms);
+#else
+    struct timespec ts;
+    ts.tv_sec = 0;
+    ts.tv_nsec = ((int32_t)t_ms * 1000);
+    nanosleep(&ts, NULL);
+#endif
+}
 
 void scanThread()
 {

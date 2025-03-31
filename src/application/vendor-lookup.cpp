@@ -46,7 +46,7 @@ app::Vendor app::lookupVendor(const mac::Addr& mac)
         const auto tmp = onlineLookup(mac);
         if (!tmp.empty()) { app::cache::add(mac, tmp); }
 
-        vendor = app::Vendor(tmp.name(), getVendorColour(tmp.name()));
+        vendor = app::Vendor(app::Vendor::Source::api, tmp.name(), getVendorColour(tmp.name()));
     }
 
     return vendor;
@@ -57,7 +57,7 @@ app::Vendor app::lookupVendor(const mac::Addr& mac)
 app::Vendor cacheLookup(const mac::Addr& mac)
 {
     const auto v = app::cache::get(mac);
-    return app::Vendor(v.name(), v.colour());
+    return app::Vendor(app::Vendor::Source::cache, v.name(), v.colour());
 }
 
 app::cache::Vendor onlineLookup(const mac::Addr& mac)

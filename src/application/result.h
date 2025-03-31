@@ -11,6 +11,7 @@ copyright       GPL-3.0 - Copyright (c) 2025 Oliver Blaser
 #include <cstdint>
 #include <string>
 
+#include "application/vendor.h"
 #include "middleware/ip-addr.h"
 #include "middleware/mac-addr.h"
 
@@ -18,50 +19,6 @@ copyright       GPL-3.0 - Copyright (c) 2025 Oliver Blaser
 
 
 namespace app {
-
-class Vendor
-{
-public:
-    using source_type = char;
-    class Source
-    {
-    public:
-        static constexpr char api = 'a';
-        static constexpr char cache = 'c';
-    };
-
-public:
-    Vendor()
-        : m_name(), m_colour(0), m_source('-')
-    {}
-
-    Vendor(const source_type& source, const char* name)
-        : m_name(name), m_colour(0), m_source(source)
-    {}
-
-    Vendor(const source_type& source, const std::string& name)
-        : m_name(name), m_colour(0), m_source(source)
-    {}
-
-    Vendor(const source_type& source, const std::string& name, const omw::Color colour)
-        : m_name(name), m_colour(colour), m_source(source)
-    {}
-
-    virtual ~Vendor() {}
-
-    const std::string& name() const { return m_name; }
-    const omw::Color& colour() const { return m_colour; }
-    const source_type& source() const { return m_source; }
-
-    bool hasColour() const { return (m_colour.toRGB() != 0); }
-
-    bool empty() const { return m_name.empty(); }
-
-private:
-    std::string m_name;
-    omw::Color m_colour;
-    source_type m_source;
-};
 
 class ScanResult
 {

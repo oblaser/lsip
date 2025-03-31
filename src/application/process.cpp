@@ -6,8 +6,11 @@ copyright       GPL-3.0 - Copyright (c) 2025 Oliver Blaser
 
 #include <iomanip>
 #include <iostream>
+#include <mutex>
+#include <sstream>
 #include <stdexcept>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include "application/result.h"
@@ -19,7 +22,14 @@ copyright       GPL-3.0 - Copyright (c) 2025 Oliver Blaser
 #include "project.h"
 
 #include <omw/cli.h>
+#include <omw/defs.h>
 #include <omw/string.h>
+
+#if OMW_PLAT_WIN
+#include <Windows.h>
+#else
+#include <time.h>
+#endif
 
 
 using std::cout;
@@ -27,7 +37,93 @@ using std::endl;
 
 
 
+class Queue
+{
+public:
+#if PRJ_DEBUG
+    static constexpr size_t maxThCount = 10;
+#else
+    static constexpr size_t maxThCount = 20;
+#endif
+
+    using lock_guard = std::lock_guard<std::mutex>;
+
+public:
+    Queue()
+        : m_thCount(0)
+    {}
+
+    virtual ~Queue() {}
+
+    void setRange(const std::vector<ip::Addr4>& range)
+    {
+        lock_guard lg(mtx);
+        m_ip = range;
+    }
+
+    app::ScanResult popRes()
+    {
+        lock_guard lg(mtx);
+        app::ScanResult res;
+        if (!m_res.empty())
+        {
+            res = m_res.front();
+            m_res.erase(m_res.begin());
+        }
+        return res;
+    }
+
+    size_t thCount() const
+    {
+        lock_guard lg(mtx);
+        return m_thCount;
+    }
+
+    size_t remaining() const
+    {
+        lock_guard lg(mtx);
+        return m_ip.size();
+    }
+
+    bool done() const
+    {
+        lock_guard lg(mtx);
+        return (m_ip.empty() && m_res.empty() && (m_thCount == 0));
+    }
+
+public: // thread internal
+    ip::Addr4 popIP()
+    {
+        lock_guard lg(mtx);
+        ++m_thCount;
+        const ip::Addr4 ip = m_ip.front();
+        m_ip.erase(m_ip.begin());
+        return ip;
+    }
+
+    void queueRes(const app::ScanResult& res)
+    {
+        lock_guard lg(mtx);
+        --m_thCount;
+        m_res.push_back(res);
+    }
+
+private:
+    mutable std::mutex mtx;
+    size_t m_thCount;
+    std::vector<ip::Addr4> m_ip;
+    std::vector<app::ScanResult> m_res;
+};
+
+
+
+static Queue queue;
+
+
+
+static void scanThread();
 static void printMaskAssumeInfo(const ip::SubnetMask4& mask);
+static void printResult(const app::ScanResult& result);
 static int getRange(std::vector<ip::Addr4>& range, const std::string& argAddrRange);
 
 
@@ -44,39 +140,39 @@ int app::process(const std::string& argAddrRange)
         return -(__LINE__);
     }
 
+    queue.setRange(range);
+
 
 
     cout << endl;
 
-    for (size_t i = 0; i < range.size(); ++i)
-    {
-        const auto result = app::scan(range[i]);
-
-        if (result.hostFound())
+    do {
+        const size_t thCount = queue.thCount();
+        if ((queue.remaining() != 0) && (thCount < Queue::maxThCount))
         {
-            cout << " " << std::left << std::setw(15) << result.ip().toString();
-
-            if (result.mac().isCID()) { cout << omw::fgYellow; }
-            cout << "  " << std::left << std::setw(17) << result.mac().toString();
-            cout << omw::fgDefault;
-
-            cout << "  " << std::right << std::setw(4) << result.duration() << "ms";
-
-            if (result.knownVendor())
-            {
-                if (result.vendor().hasColour())
-                {
-                    const auto& col = result.vendor().colour();
-                    cout << omw::foreColor(col);
-                }
-
-                cout << "  " << result.vendor().name();
-                cout << omw::fgDefault;
-            }
-
-            cout << endl;
+            std::thread th(scanThread);
+            th.detach();
+            while (queue.thCount() == thCount) {} // wait until the thread has started and popped the IP
         }
+
+        uint16_t sleep_ms = 100;
+        const auto res = queue.popRes();
+        if (!res.empty())
+        {
+            printResult(res);
+            sleep_ms = 1;
+        }
+
+#if OMW_PLAT_WIN
+        Sleep(sleep_ms);
+#else
+        struct timespec ts;
+        ts.tv_sec = 0;
+        ts.tv_nsec = ((int32_t)sleep_ms * 1000);
+        nanosleep(&ts, NULL);
+#endif
     }
+    while (!queue.done());
 
     cout << endl;
 
@@ -86,6 +182,16 @@ int app::process(const std::string& argAddrRange)
 }
 
 
+
+void scanThread()
+{
+    const auto ip = queue.popIP();
+
+    THREAD_PRINT(ip.toString());
+
+    const auto res = app::scan(ip);
+    queue.queueRes(res);
+}
 
 void printMaskAssumeInfo(const ip::SubnetMask4& mask)
 {
@@ -98,6 +204,35 @@ void printMaskAssumeInfo(const ip::SubnetMask4& mask)
 #else
     (void)mask;
 #endif
+}
+
+void printResult(const app::ScanResult& result)
+{
+    std::stringstream ss;
+
+    ss << " " << std::left << std::setw(15) << result.ip().toString();
+
+    if (result.mac().isCID()) { ss << omw::fgYellow; }
+    ss << "  " << std::left << std::setw(17) << result.mac().toString();
+    ss << omw::fgDefault;
+
+    ss << "  " << std::right << std::setw(4) << result.duration() << "ms";
+
+    const auto& vendor = result.vendor();
+    if (!vendor.empty())
+    {
+        if (vendor.hasColour())
+        {
+            const auto& col = vendor.colour();
+            ss << omw::foreColor(col);
+        }
+
+        ss << "  " << vendor.name();
+        ss << omw::fgDefault;
+    }
+
+    ss << '\n';
+    cout << ss.str() << std::flush;
 }
 
 int getRange(std::vector<ip::Addr4>& range, const std::string& argAddrRange)

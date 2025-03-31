@@ -9,7 +9,6 @@ copyright       GPL-3.0 - Copyright (c) 2025 Oliver Blaser
 #include <filesystem>
 #include <fstream>
 #include <iostream>
-#include <mutex>
 #include <string>
 #include <vector>
 
@@ -19,6 +18,7 @@ copyright       GPL-3.0 - Copyright (c) 2025 Oliver Blaser
 #include "vendor-cache.h"
 
 #include <json/json.hpp>
+#include <omw/clock.h>
 #include <omw/string.h>
 #include <omw/version.h>
 #include <omw/windows/windows.h>
@@ -57,11 +57,85 @@ private:
 
 
 
-static std::mutex ___cache_mtx;
-using lock_guard = std::lock_guard<std::mutex>;
-#define MTX_LG()     lock_guard ___lg_cache_mtx(___cache_mtx)
-#define MTX_LOCK()   ___cache_mtx.lock()
-#define MTX_UNLOCK() ___cache_mtx.unlock()
+#if 1 // write precedence is not guaranteed
+#include <shared_mutex>
+
+static std::shared_mutex ___shmtx;
+
+#define MTX_EX_LOCK()                                                       \
+    {                                                                       \
+        const auto t = omw::clock::now();                                   \
+        ___shmtx.lock();                                                    \
+        THREAD_PRINT("EX " + std::to_string(omw::clock::now() - t) + "us"); \
+    }
+
+#define MTX_EX_UNLOCK()    \
+    {                      \
+        ___shmtx.unlock(); \
+    }
+
+#define MTX_SH_LOCK()                                                       \
+    {                                                                       \
+        const auto t = omw::clock::now();                                   \
+        ___shmtx.lock_shared();                                             \
+        THREAD_PRINT("SH " + std::to_string(omw::clock::now() - t) + "us"); \
+    }
+
+#define MTX_SH_UNLOCK()           \
+    {                             \
+        ___shmtx.unlock_shared(); \
+    }
+
+
+#define MTX_LOCK_WR()   MTX_EX_LOCK()
+#define MTX_UNLOCK_WR() MTX_EX_UNLOCK()
+#define MTX_LOCK_RD()   MTX_SH_LOCK()
+#define MTX_UNLOCK_RD() MTX_SH_UNLOCK()
+
+#else // only one thread can lookup at once
+#include <mutex>
+
+#warning "the other option fits better to the philosophy of having a cache"
+
+static std::mutex ___mtx_data, ___mtx_prio, ___mtx_lo;
+
+#define MTX_PRIO_HI_LOCK()                                                  \
+    {                                                                       \
+        const auto t = omw::clock::now();                                   \
+        ___mtx_prio.lock();                                                 \
+        ___mtx_data.lock();                                                 \
+        ___mtx_prio.unlock();                                               \
+        THREAD_PRINT("HI " + std::to_string(omw::clock::now() - t) + "us"); \
+    }
+
+#define MTX_PRIO_HI_UNLOCK()  \
+    {                         \
+        ___mtx_data.unlock(); \
+    }
+
+#define MTX_PRIO_LO_LOCK()                                                  \
+    {                                                                       \
+        const auto t = omw::clock::now();                                   \
+        ___mtx_lo.lock();                                                   \
+        ___mtx_prio.lock();                                                 \
+        ___mtx_data.lock();                                                 \
+        ___mtx_prio.unlock();                                               \
+        THREAD_PRINT("LO " + std::to_string(omw::clock::now() - t) + "us"); \
+    }
+
+#define MTX_PRIO_LO_UNLOCK()  \
+    {                         \
+        ___mtx_data.unlock(); \
+        ___mtx_lo.unlock();   \
+    }
+
+#define MTX_LOCK_WR()   MTX_PRIO_HI_LOCK()
+#define MTX_UNLOCK_WR() MTX_PRIO_HI_UNLOCK()
+#define MTX_LOCK_RD()   MTX_PRIO_LO_LOCK()
+#define MTX_UNLOCK_RD() MTX_PRIO_LO_UNLOCK()
+#endif
+
+
 
 static std::vector<Record> ma_l, ma_m, ma_s;
 static bool changed = false;
@@ -76,7 +150,7 @@ static void writeCacheFile(const fs::path& filepath);
 
 void app::cache::load()
 {
-    MTX_LG();
+    MTX_LOCK_WR();
 
     const fs::path filepath = getFilePath();
 
@@ -102,18 +176,26 @@ void app::cache::load()
             }
         }
     }
+
+    MTX_UNLOCK_WR();
 }
 
 void app::cache::save()
 {
-    MTX_LG();
+    MTX_LOCK_RD();
 
     if (changed) { writeCacheFile(getFilePath()); }
+
+    MTX_UNLOCK_RD();
 }
 
 app::cache::Vendor app::cache::get(const mac::Addr& mac)
 {
-    MTX_LG();
+    MTX_LOCK_RD();
+
+    const std::vector<Record>& rd_ma_l = ma_l;
+    const std::vector<Record>& rd_ma_m = ma_m;
+    const std::vector<Record>& rd_ma_s = ma_s;
 
     app::cache::Vendor v = app::cache::Vendor();
     bool found = false;
@@ -122,59 +204,74 @@ app::cache::Vendor app::cache::get(const mac::Addr& mac)
 
     const auto oui36 = (mac & mac::EUI48::oui36_mask);
 
-    for (size_t i = 0; (i < ma_s.size()) && !found; ++i)
+    for (size_t i = 0; (i < rd_ma_s.size()) && !found; ++i)
     {
-        if (oui36 == ma_s[i].oui()) { return ma_s[i]; }
+        if (oui36 == rd_ma_s[i].oui()) { v = rd_ma_s[i]; }
     }
 
 
 
     const auto oui28 = (mac & mac::EUI48::oui28_mask);
 
-    for (size_t i = 0; (i < ma_m.size()) && !found; ++i)
+    for (size_t i = 0; (i < rd_ma_m.size()) && !found; ++i)
     {
-        if (oui28 == ma_m[i].oui()) { return ma_m[i]; }
+        if (oui28 == rd_ma_m[i].oui()) { v = rd_ma_m[i]; }
     }
 
 
 
     const auto oui = (mac & mac::EUI48::oui_mask);
 
-    for (size_t i = 0; (i < ma_l.size()) && !found; ++i)
+    for (size_t i = 0; (i < rd_ma_l.size()) && !found; ++i)
     {
-        if (oui == ma_l[i].oui()) { return ma_l[i]; }
+        if (oui == rd_ma_l[i].oui()) { v = rd_ma_l[i]; }
     }
 
 
+
+    MTX_UNLOCK_RD();
 
     return v;
 }
 
 void app::cache::add(const mac::EUI48& mac, const app::cache::Vendor& vendor)
 {
-    MTX_LG();
+    MTX_LOCK_WR();
 
-    switch (vendor.addrBlock())
+    try
     {
-    case mac::Type::OUI:
-        ma_l.push_back(Record(vendor.name(), vendor.colour(), (mac & mac::EUI48::oui_mask)));
-        changed = true;
-        break;
+        switch (vendor.addrBlock())
+        {
+        case mac::Type::OUI:
+            ma_l.push_back(Record(vendor.name(), vendor.colour(), (mac & mac::EUI48::oui_mask)));
+            changed = true;
+            break;
 
-    case mac::Type::OUI28:
-        ma_m.push_back(Record(vendor.name(), vendor.colour(), (mac & mac::EUI48::oui28_mask)));
-        changed = true;
-        break;
+        case mac::Type::OUI28:
+            ma_m.push_back(Record(vendor.name(), vendor.colour(), (mac & mac::EUI48::oui28_mask)));
+            changed = true;
+            break;
 
-    case mac::Type::OUI36:
-        ma_s.push_back(Record(vendor.name(), vendor.colour(), (mac & mac::EUI48::oui36_mask)));
-        changed = true;
-        break;
+        case mac::Type::OUI36:
+            ma_s.push_back(Record(vendor.name(), vendor.colour(), (mac & mac::EUI48::oui36_mask)));
+            changed = true;
+            break;
 
-    case mac::Type::CID:
-        cli::printWarning("can't add CID to cache");
-        break;
+        case mac::Type::CID:
+            cli::printWarning("can't add CID to cache");
+            break;
+        }
     }
+    catch (const std::exception& ex)
+    {
+        cli::printError("failed to add \"" + vendor.name() + "\" to cache", ex.what());
+    }
+    catch (...)
+    {
+        cli::printError("failed to add \"" + vendor.name() + "\" to cache");
+    }
+
+    MTX_UNLOCK_WR();
 }
 
 

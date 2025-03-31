@@ -70,8 +70,7 @@ public:
     uint32_t duration() const { return m_duration; } ///< [ms]
     const Vendor& vendor() const { return m_vendor; }
 
-    bool hostFound() const { return (m_ip != ip::Addr4::null); }
-    bool knownVendor() const { return !m_vendor.name().empty(); }
+    bool empty() const { return (m_ip == ip::Addr4::null); }
 
 private:
     ip::Addr4 m_ip;

@@ -199,6 +199,8 @@ int main(int argc, char** argv)
         else if (argstr::contains(args, argstr::version)) { printVersion(); }
         else
         {
+            THREAD_PRINT("parent");
+
             app::cache::load();
             std::thread thread_curl = std::thread(curl::thread);
 

@@ -18,8 +18,12 @@ copyright       GPL-3.0 - Copyright (c) 2025 Oliver Blaser
 
 #include <curl-thread/curl.h>
 #include <json/json.hpp>
+#include <omw/clock.h>
 #include <omw/color.h>
 #include <omw/string.h>
+
+
+#define USE_API (0) // only affects debug builds
 
 
 using json = nlohmann::json;
@@ -60,7 +64,8 @@ app::cache::Vendor onlineLookup(const mac::Addr& mac)
 {
     app::cache::Vendor vendor;
 
-#if 1
+#if USE_API || !PRJ_DEBUG
+
     const auto req = curl::Request(curl::Method::GET, "https://www.macvendorlookup.com/api/v2/" + mac.toString() + "/json", 30, 90);
     const auto curlId = curl::queueRequest(req, curl::Priority::normal);
     if (curlId.isValid())
@@ -79,7 +84,9 @@ app::cache::Vendor onlineLookup(const mac::Addr& mac)
     else { cli::printError("curl queue ID: " + curlId.toString()); }
 
     if (vendor.empty()) { cli::printError("failed to lookup " + mac.toString() + " online"); }
-#else
+
+#else // USE_API
+
     mac::Type addrBlock;
     std::string name;
 
@@ -116,7 +123,8 @@ app::cache::Vendor onlineLookup(const mac::Addr& mac)
     }
 
     vendor = app::cache::Vendor(addrBlock, name, getVendorColour(name));
-#endif
+
+#endif // USE_API
 
     return vendor;
 }

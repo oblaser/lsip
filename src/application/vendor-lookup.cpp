@@ -30,7 +30,6 @@ using json = nlohmann::json;
 
 
 
-static app::Vendor cacheLookup(const mac::Addr& mac);
 static app::cache::Vendor onlineLookup(const mac::Addr& mac);
 static app::cache::Vendor parseApiResponse(const std::string& body);
 static omw::Color getVendorColour(const std::string& name);
@@ -39,7 +38,7 @@ static omw::Color getVendorColour(const std::string& name);
 
 app::Vendor app::lookupVendor(const mac::Addr& mac)
 {
-    app::Vendor vendor = cacheLookup(mac);
+    app::Vendor vendor = app::cache::get(mac);
 
     if (vendor.empty())
     {
@@ -53,12 +52,6 @@ app::Vendor app::lookupVendor(const mac::Addr& mac)
 }
 
 
-
-app::Vendor cacheLookup(const mac::Addr& mac)
-{
-    const auto v = app::cache::get(mac);
-    return app::Vendor(app::Vendor::Source::cache, v.name(), v.colour());
-}
 
 app::cache::Vendor onlineLookup(const mac::Addr& mac)
 {
@@ -122,7 +115,16 @@ app::cache::Vendor onlineLookup(const mac::Addr& mac)
         name = "Espressif Inc.";
     }
 
-    vendor = app::cache::Vendor(addrBlock, name, getVendorColour(name));
+    if (!name.empty())
+    {
+        json j(json::value_t::array);
+        json jElement(json::value_t::object);
+        jElement["company"] = name;
+        jElement["type"] = mac::toAddrBlockString(addrBlock);
+        j.push_back(jElement);
+
+        vendor = parseApiResponse(j.dump());
+    }
 
 #endif // USE_API
 
@@ -146,11 +148,11 @@ app::cache::Vendor parseApiResponse(const std::string& body)
         else if ((type == "oui24") || (type == "oui") || (type == "ma-l")) { addrBlock = mac::Type::OUI; }
         else { throw -(__LINE__); }
 
-#if PRJ_DEBUG && 1
+#if PRJ_DEBUG && 0
         std::cout << "API: " << type << " => " << mac::toAddrBlockString(addrBlock) << " \"" << name << '"' << std::endl;
 #endif
 
-        vendor = app::cache::Vendor(addrBlock, name, getVendorColour(name));
+        vendor = app::cache::Vendor(app::cache::Vendor::Source::api, addrBlock, name, getVendorColour(name));
     }
     catch (...)
     {}

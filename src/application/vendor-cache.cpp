@@ -9,9 +9,11 @@ copyright       GPL-3.0 - Copyright (c) 2025 Oliver Blaser
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <mutex>
 #include <string>
 #include <vector>
 
+#include "application/vendor.h"
 #include "middleware/cli.h"
 #include "middleware/mac-addr.h"
 #include "project.h"
@@ -31,29 +33,27 @@ namespace fs = std::filesystem;
 
 
 
-class Record : public app::cache::Vendor
+template <app::Vendor::source_type __src> class ___Record : public app::Vendor
 {
 public:
-    Record()
-        : Vendor(), m_oui(mac::EUI48::null)
+    ___Record()
+        : app::Vendor(), m_oui(mac::EUI48::null)
     {}
 
-    Record(const std::string& name, const omw::Color colour, const mac::EUI48& oui)
-        : Vendor(), m_oui(oui)
-    {
-        this->setName(name);
-        this->setColour(colour);
-    }
+    ___Record(const std::string& name, const omw::Color colour, const mac::EUI48& oui)
+        : app::Vendor(__src, name, colour), m_oui(oui)
+    {}
 
-    virtual ~Record() {}
+    virtual ~___Record() {}
 
     const mac::EUI48& oui() const { return m_oui; }
-
-    bool empty() const { return this->name().empty(); }
 
 private:
     mac::EUI48 m_oui;
 };
+
+using Record = ___Record<app::Vendor::Source::cache>;
+using IntermediateRecord = ___Record<app::Vendor::Source::intermediate_cache>;
 
 
 
@@ -93,9 +93,12 @@ static std::shared_mutex ___shmtx;
 #define MTX_UNLOCK_RD() MTX_SH_UNLOCK()
 
 #else // only one thread can lookup at once
-#include <mutex>
 
+#ifndef _MSC_VER
 #warning "the other option fits better to the philosophy of having a cache"
+#endif
+
+// #error "does not make sens in combination with the intermediate cache"
 
 static std::mutex ___mtx_data, ___mtx_prio, ___mtx_lo;
 
@@ -189,7 +192,7 @@ void app::cache::save()
     MTX_UNLOCK_RD();
 }
 
-app::cache::Vendor app::cache::get(const mac::Addr& mac)
+app::Vendor app::cache::get(const mac::Addr& mac)
 {
     MTX_LOCK_RD();
 
@@ -197,7 +200,7 @@ app::cache::Vendor app::cache::get(const mac::Addr& mac)
     const std::vector<Record>& rd_ma_m = ma_m;
     const std::vector<Record>& rd_ma_s = ma_s;
 
-    app::cache::Vendor v = app::cache::Vendor();
+    app::Vendor v = app::Vendor();
     bool found = false;
 
 
@@ -317,15 +320,21 @@ fs::path getFilePath()
 
     if (path.empty())
     {
-#if OMW_PLAT_WIN
-
 #if PRJ_DEBUG && USE_DEBUG_PATH
+
+#if OMW_PLAT_WIN
         const fs::path basePath_a = "Debug";
+#else
+        const fs::path basePath_a = ".";
+#endif
         const fs::path basePath_b = basePath_a;
-        const fs::path fallback = basePath_a / dirname / filename;
+        const fs::path fallback = basePath_a / ("cache-dbg-" + dirname) / filename;
         const fs::path filePath_a = fallback;
         const fs::path filePath_b = fallback;
-#else  // PRJ_DEBUG
+
+#else // PRJ_DEBUG
+
+#if OMW_PLAT_WIN
         const fs::path fallback = fs::path("C:/") / dirname / filename;
         const fs::path basePath_a = getEnvVarPath("APPDATA");
         const fs::path basePath_b = getEnvVarPath("PROGRAMDATA");
@@ -351,25 +360,15 @@ fs::path getFilePath()
             filePath_a = basePath_a / dirname / filename;
             filePath_b = basePath_b / dirname / filename;
         }
-#endif // PRJ_DEBUG
-
-#else // OMW_PLAT_WIN
-
-#if PRJ_DEBUG && USE_DEBUG_PATH
-        const fs::path basePath_a = ".";
-        const fs::path basePath_b = basePath_a;
-        const fs::path fallback = basePath_a / ("cache-dbg-" + dirname) / filename;
-        const fs::path filePath_a = fallback;
-        const fs::path filePath_b = fallback;
-#else  // PRJ_DEBUG
+#else  // OMW_PLAT_WIN
         const fs::path fallback = fs::path("/var/tmp") / dirname / filename;
         const fs::path basePath_a = "~/.cache";
         const fs::path basePath_b = "~";
         const fs::path filePath_a = basePath_a / dirname / filename;
         const fs::path filePath_b = basePath_b / ('.' + dirname) / filename;
-#endif // PRJ_DEBUG
-
 #endif // OMW_PLAT_WIN
+
+#endif // PRJ_DEBUG
 
         if (fs::exists(filePath_a)) { path = filePath_a; }
         else if (fs::exists(filePath_b)) { path = filePath_b; }

@@ -20,6 +20,7 @@ copyright       GPL-3.0 - Copyright (c) 2025 Oliver Blaser
 
 
 
+static inline uint32_t convertDuration(omw::clock::timepoint_t dur_us) { return (uint32_t)((dur_us + 500) / 1000); }
 static app::ScanResult impl_scan(const ip::Addr4& addr);
 
 
@@ -32,7 +33,7 @@ app::ScanResult app::scan(const ip::Addr4& addr)
 
 
 
-#if PRJ_DEBUG
+#if PRJ_DEBUG && 0
 
 #include <atomic>
 #include <curl-thread/curl.h>
@@ -73,7 +74,7 @@ app::ScanResult impl_scan(const ip::Addr4& addr)
 
     dur_us = omw::clock::now() - dur_us;
 
-    return app::ScanResult(addr, mac, (uint32_t)((dur_us + 500) / 1000), app::lookupVendor(mac));
+    return app::ScanResult(addr, mac, convertDuration(dur_us), app::lookupVendor(mac));
 }
 
 #else // PRJ_DEBUG
@@ -128,7 +129,7 @@ app::ScanResult impl_scan(const ip::Addr4& addr)
             else { mac[i] = 0; }
         }
 
-        r = app::ScanResult(addr, mac, (uint32_t)((dur_us + 500) / 1000), app::lookupVendor(mac));
+        r = app::ScanResult(addr, mac, convertDuration(dur_us), app::lookupVendor(mac));
     }
     else
     {
@@ -208,9 +209,42 @@ std::string arpres_to_string(DWORD arp_res)
 
 
 
+extern int impl_scan_xnix(const char* ipStr, uint8_t* macBuffer);
+#if PRJ_DEBUG
+extern void receivePrintL2();
+#endif
+
 app::ScanResult impl_scan(const ip::Addr4& addr)
 {
-    // TODO
+    app::ScanResult r;
+
+#if PRJ_DEBUG && 1
+    receivePrintL2();
+#else // PRJ_DEBUG
+
+    uint8_t macBuffer[6];
+
+    omw::clock::timepoint_t dur_us = omw::clock::now();
+    const int err = impl_scan_xnix(addr.toString().c_str(), macBuffer);
+    dur_us = omw::clock::now() - dur_us;
+
+    if (!err)
+    {
+        const mac::Addr mac(macBuffer);
+        r = app::ScanResult(addr, mac, convertDuration(dur_us), app::lookupVendor(mac));
+    }
+    else
+    {
+        if (err > 0)
+        {
+            // nop, timeout
+        }
+        else { cli::printError("failed to scan " + addr.toString() + " (" + std::to_string(err) + ")"); }
+    }
+
+#endif // PRJ_DEBUG
+
+    return r;
 }
 
 

@@ -209,16 +209,14 @@ std::string arpres_to_string(DWORD arp_res)
 
 
 
-extern int impl_scan_xnix(const char* ipStr, uint8_t* macBuffer);
-#if PRJ_DEBUG
 extern void level2_sniffer();
-#endif
+extern int impl_scan_xnix(const char* addrStr, uint8_t* macBuffer);
 
 app::ScanResult impl_scan(const ip::Addr4& addr)
 {
     app::ScanResult r;
 
-#if PRJ_DEBUG && 1
+#if PRJ_DEBUG && 0
     level2_sniffer();
 #else // PRJ_DEBUG
 

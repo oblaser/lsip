@@ -17,16 +17,21 @@ copyright       GPL-3.0 - Copyright (c) 2025 Oliver Blaser
 #if (OMW_PLAT_UNIX || OMW_PLAT_LINUX || OMW_PLAT_APPLE) // *nix
 
 #include <errno.h>
+#include <stdio.h>
 #include <string.h>
 
 #include <arpa/inet.h>
+
 #include <net/ethernet.h>
+#include <net/if.h>
 #include <net/if_arp.h>
 #include <netinet/ip.h>
-#include <netinet/ip_icmp.h>
-#include <netinet/tcp.h>
-#include <netinet/udp.h>
+
+#include <sys/ioctl.h>
 #include <sys/socket.h>
+#include <sys/types.h>
+
+#include <ifaddrs.h>
 #include <unistd.h>
 
 
@@ -37,69 +42,116 @@ copyright       GPL-3.0 - Copyright (c) 2025 Oliver Blaser
 
 
 
+/**
+ * @brief Extended 802.1Q VLAN ethernet header
+ */
+struct ethhdr8021Q
+{
+    uint8_t ehq_dest[ETH_ALEN];
+    uint8_t ehq_source[ETH_ALEN];
+    uint16_t ehq_tpid;
+    uint16_t ehq_tci;
+    uint16_t ehq_proto;
+} __attribute__((packed, aligned(1)));
+
+#define ARP_HLEN 6 // hardware address length
+#define ARP_PLEN 4 // protocol address length
+
+/**
+ * @brief IPv4 ARP data container.
+ *
+ * - hardware address: MAC/EUI48
+ * - protocol address: IPv4 address
+ */
+struct arpdata
+{
+    uint8_t ar_sha[ARP_HLEN]; // sender hardware address
+    uint8_t ar_spa[ARP_PLEN]; // sender protocol address
+    uint8_t ar_tha[ARP_HLEN]; // target hardware address
+    uint8_t ar_tpa[ARP_PLEN]; // target protocol address
+} __attribute__((packed, aligned(1)));
+
+static_assert(ARP_HLEN == ETH_ALEN);
+static_assert(ARP_PLEN == sizeof(struct in_addr));
+
+
+
+static int getifaddr(char* ifname, size_t ifnameSize, struct sockaddr* ifaddr, int af, const char* taddrStr, struct in_addr* taddr);
 static std::string aftos(int af);
 static std::string ethptos(uint32_t proto);
 static std::string ipptos(uint32_t proto);
 static std::string sockaddrtos(const struct sockaddr* sa);
+static inline std::string sockaddrtos(const struct sockaddr_in* sa) { return sockaddrtos((const struct sockaddr*)sa); }
+static inline std::string sockaddrtos(const struct sockaddr_in6* sa) { return sockaddrtos((const struct sockaddr*)sa); }
 static uint16_t inetChecksum(const uint8_t* data, size_t count);
 
 
 
-/**
- * @param ipStr IPv4 address, format: `a.b.c.d`
- * @param macBuffer uint8_t[6] MAC address buffer
- * @return 0 on success, negative on error, positive on timeout
- */
-int impl_scan_xnix(const char* ipStr, uint8_t* macBuffer)
-{
-#if PRJ_DEBUG && 1
-    for (size_t i = 0; i < 6; ++i) { macBuffer[i] = 0xFF; }
-    return 0;
-#else // PRJ_DEBUG
-#error "TODO implement"
-#endif // PRJ_DEBUG
-}
+#if PRJ_DEBUG && 1 // L2 sniffer
 
+#include "application/vendor-lookup.h"
 
-
-#if PRJ_DEBUG
-
-#include <application/vendor-lookup.h>
+#include <netinet/ip_icmp.h>
+#include <netinet/tcp.h>
+#include <netinet/udp.h>
 
 static int printL2Packet(const uint8_t* sockData, size_t sockDataSize, const struct sockaddr* sockSrcAddr)
 {
     const struct ethhdr* const ethHeader = (const struct ethhdr*)(sockData + 0);
     const mac::Addr srcMac(ethHeader->h_source);
     const mac::Addr dstMac(ethHeader->h_dest);
-    const uint16_t ethProtocol = ntohs(ethHeader->h_proto);
+    uint16_t ethProtocol = ntohs(ethHeader->h_proto);
     const size_t ethHeaderSize = ((ethProtocol == ETH_P_8021Q) ? (ETH_HLEN + 4) : (ETH_HLEN));
     const uint8_t* const ethData = sockData + ethHeaderSize;
-    const size_t ethDataSize = sockDataSize - ethHeaderSize - 4 /* CRC */;
+    const size_t ethDataSize = sockDataSize - ethHeaderSize;
 
-    // filter
+#if 0 // filter
     if (((srcMac & mac::EUI48::oui28_mask) == mac::EUI48(0xB8D812600000)) || //
         (ethProtocol != ETH_P_ARP))                                          //
     {
         return 1;
     }
+#endif
 
 #if 0
-    // looks like this is always the AF used when creating the socket
-    printf("recvfrom() src addr %s: %s\n", aftos(sockSrcAddr->sa_family).c_str(), sockaddrtos(sockSrcAddr).c_str());
-    cli::hexDump((uint8_t*)(sockSrcAddr->sa_data), sizeof(sockSrcAddr->sa_data));
+    if (sockSrcAddr)
+    {
+        // looks like this is always the AF used when creating the socket
+        printf("recvfrom() src addr %s: %s\n", aftos(sockSrcAddr->sa_family).c_str(), sockaddrtos(sockSrcAddr).c_str());
+        cli::hexDump((uint8_t*)(sockSrcAddr->sa_data), sizeof(sockSrcAddr->sa_data));
 
-    printf("\nrecvfrom() data [%zu]:\n", sockDataSize);
-    cli::hexDump(sockData, sockDataSize);
+        printf("\nrecvfrom() data [%zu]:\n", sockDataSize);
+        cli::hexDump(sockData, sockDataSize);
 
-    printf("\n");
+        printf("\n");
+    }
 #endif
 
     printf("Ethernet\n");
     printf("  src   %s %s\n", srcMac.toString().c_str(), app::lookupVendor(srcMac).name().c_str());
     printf("  dst   %s %s\n", dstMac.toString().c_str(), app::lookupVendor(dstMac).name().c_str());
+
+    if (ethProtocol == ETH_P_8021Q) // not tested
+    {
+        const struct ethhdr8021Q* const ethHeader = (const struct ethhdr8021Q*)(sockData + 0);
+        const uint16_t ethVlanTpid = ntohs(ethHeader->ehq_tpid); // Tag Protocol Identifier
+        const uint16_t ethVlanTci = ntohs(ethHeader->ehq_tci);   // Tag Control Information
+        const int ethVlanPcp = ethVlanTci >> 13;                 // Priority Code Point
+        const int ethVlanDei = (ethVlanTci >> 12) & 0x01;        // Drop Eligible Indicator
+        const int ethVlanVid = ethVlanTci & 0x0FFF;              // VLAN-Identifier
+        ethProtocol = ntohs(ethHeader->ehq_proto);
+
+        printf("  802.1Q VLAN Extended Header (0x%04x)\n", (int)ethVlanTpid);
+        printf("    PCP %i", ethVlanPcp);
+        printf("    DEI %i", ethVlanDei);
+        printf("    VID %i", ethVlanVid);
+    }
+
     printf("  proto 0x%04x %s\n", (int)ethProtocol, ethptos(ethProtocol).c_str());
     printf("  hdr size  %zu\n", ethHeaderSize);
     printf("  data size %zu\n", ethDataSize);
+
+
 
     if (ethProtocol == ETH_P_IP)
     {
@@ -137,8 +189,8 @@ static int printL2Packet(const uint8_t* sockData, size_t sockDataSize, const str
         printf("  TTL       %i\n", (int)ipTtl);
         printf("  protocol  %02x %s\n", ipProtocol, ipptos(ipProtocol).c_str());
         printf("  check     %s0x%04x\033[90m 0x%04x\033[39m\n", (ipCheckCalc == 0 ? "" : "\033[31m"), (int)ipCheck, (int)ipCheckCalc);
-        printf("  src addr  %s\n", inet_ntop(AF_INET, &(ipHeader->saddr), ntopBuffer, sizeof(ntopBuffer)));
-        printf("  dst addr  %s\n", inet_ntop(AF_INET, &(ipHeader->daddr), ntopBuffer, sizeof(ntopBuffer)));
+        printf("  src addr  %s = 0x%08x\n", inet_ntop(AF_INET, &(ipHeader->saddr), ntopBuffer, sizeof(ntopBuffer)), srcIp);
+        printf("  dst addr  %s = 0x%08x\n", inet_ntop(AF_INET, &(ipHeader->daddr), ntopBuffer, sizeof(ntopBuffer)), dstIp);
         printf("  hdr size  %zu\n", ipHeaderSize);
         printf("  data size %zu\n", ipDataSize);
 
@@ -156,6 +208,8 @@ static int printL2Packet(const uint8_t* sockData, size_t sockDataSize, const str
             const uint8_t* const tcpData = ipData + tcpHeaderSize;
             const size_t tcpDataSize = ipDataSize - tcpHeaderSize;
 
+            printf("\033[38;2;255;194;255m");
+
             printf("\nTCP\n");
             printf("  src port  %i\n", (int)srcPort);
             printf("  dst port  %i\n", (int)dstPort);
@@ -165,31 +219,54 @@ static int printL2Packet(const uint8_t* sockData, size_t sockDataSize, const str
             printf("  hdr size  %zu\n", tcpHeaderSize);
             printf("  data size %zu\n", tcpDataSize);
 
-            if (tcpDataSize < ipDataSize) { cli::hexDump(tcpData, tcpDataSize); }
-            else { cli::printWarning("TCP data size"); }
+            cli::hexDump((const uint8_t*)tcpHeader, tcpHeaderSize);
+            printf("\n");
+            cli::hexDump(tcpData, tcpDataSize);
+
+            printf("\033[39m");
+            fflush(stdout);
         }
         else if (ipProtocol == IPPROTO_UDP)
         {
             const struct udphdr* const udpHeader = (const struct udphdr*)(ipData + 0);
             const size_t udpHeaderSize = 8;
-            const uint8_t* const udpData = ipData + udpHeaderSize;
-            const size_t udpDataSize = ipDataSize - udpHeaderSize;
             const uint16_t srcPort = ntohs(udpHeader->uh_sport);
             const uint16_t dstPort = ntohs(udpHeader->uh_dport);
             const uint16_t udpLength = ntohs(udpHeader->uh_ulen);
             const uint16_t udpCheck = ntohs(udpHeader->uh_sum);
+            const uint8_t* const udpData = ipData + udpHeaderSize;
+            const size_t udpDataSize = udpLength - udpHeaderSize;
+            const uint8_t* const padData = ipData + udpHeaderSize + udpDataSize; // potential padding
+            const size_t padDataSize = ipDataSize - udpHeaderSize - udpDataSize; // potential padding
+
             const uint16_t udpCheckCalc = inetChecksum(ipData + 0, udpHeaderSize + udpDataSize);
+
+            printf("\033[38;2;156;227;255m");
 
             printf("\nUDP\n");
             printf("  src port  %i\n", (int)srcPort);
             printf("  dst port  %i\n", (int)dstPort);
             printf("  length    %i\n", (int)udpLength);
-            printf("  check     %s0x%04x\033[90m 0x%04x\033[39m\n", (udpCheckCalc == 0 ? "" : "\033[31m"), (int)udpCheck, (int)udpCheckCalc);
+            printf("  check     0x%04x, calculated: 0x%04x\n", (int)udpCheck, (int)udpCheckCalc);
             printf("  hdr size  %zu\n", udpHeaderSize);
             printf("  data size %zu\n", udpDataSize);
 
             cli::hexDump((const uint8_t*)udpHeader, udpHeaderSize);
+            printf("\n");
             cli::hexDump(udpData, udpDataSize);
+
+            printf("\033[39m");
+            fflush(stdout);
+
+            for (size_t i = 0; i < padDataSize; ++i)
+            {
+                if (padData[i])
+                {
+                    printf("\nPadding:\n");
+                    cli::hexDump(padData, padDataSize);
+                    break;
+                }
+            }
         }
         else if (ipProtocol == IPPROTO_ICMP)
         {
@@ -211,6 +288,7 @@ static int printL2Packet(const uint8_t* sockData, size_t sockDataSize, const str
             printf("  data size %zu\n", icmpDataSize);
 
             cli::hexDump((const uint8_t*)icmpHeader, icmpHeaderSize);
+            printf("\n");
             cli::hexDump(icmpData, icmpDataSize);
         }
         else
@@ -229,68 +307,53 @@ static int printL2Packet(const uint8_t* sockData, size_t sockDataSize, const str
         const uint8_t arpProtoLen = arpHeader->ar_pln;
         const uint16_t arpOperation = ntohs(arpHeader->ar_op);
         const uint8_t* const arpData = ethData + arpHeaderSize;
-        const size_t arpDataSize = ethDataSize - arpHeaderSize;
+        const size_t arpDataSize = 2 * arpHwLength + 2 * arpProtoLen;
+        const uint8_t* const padData = ethData + arpHeaderSize + arpDataSize; // padding
+        const size_t padDataSize = ethDataSize - arpHeaderSize - arpDataSize; // padding
+
+        printf("\033[38;2;244;221;153m");
 
         printf("\nARP\n");
         printf("  hw type   %i\n", (int)arpHwType);
         printf("  proto     0x%04x %s\n", (int)arpProtocol, ethptos(arpProtocol).c_str());
         printf("  hw length %i\n", (int)arpHwLength);
         printf("  proto len %i\n", (int)arpProtoLen);
-        printf("  operation %i\n", (int)arpOperation);
+        printf("  operation %i %s\n", (int)arpOperation, (arpOperation == 1 ? "request" : (arpOperation == 2 ? "reply" : "")));
         printf("  hdr size  %zu\n", arpHeaderSize);
         printf("  data size %zu\n", arpDataSize);
 
-        if ((arpHwLength == 6) && (arpProtoLen == 4))
-        {
-            struct arpdata
-            {
-                uint8_t s_mac[6]; // sender MAC address
-                uint32_t s_ip;    // sender IP address
-                uint8_t t_mac[6]; // target MAC address
-                uint32_t t_ip;    // target IP address
-            };
+        cli::hexDump((const uint8_t*)arpHeader, arpHeaderSize);
+        printf("\n");
 
+        if ((arpHwType == ARPHRD_ETHER) && (arpProtocol == ETH_P_IP) && (arpHwLength == ARP_HLEN) && (arpProtoLen == ARP_PLEN))
+        {
             const struct arpdata* const data = (const struct arpdata*)(arpData + 0);
-            const mac::Addr sMac(data->s_mac);
-            const mac::Addr dMac(data->t_mac);
+            const mac::Addr sMac(data->ar_sha);
+            const mac::Addr tMac(data->ar_tha);
 
             char ntopBuffer[32 + 15 + 1];
 
-            printf("  src MAC   %s %s\n", sMac.toString().c_str(), app::lookupVendor(sMac).name().c_str());
-            printf("  src addr  %s\n", inet_ntop(AF_INET, &(data->s_ip), ntopBuffer, sizeof(ntopBuffer)));
-
-            printf("  dst MAC   %s %s\n", dMac.toString().c_str(), app::lookupVendor(dMac).name().c_str());
-            printf("  dst addr  %s\n", inet_ntop(AF_INET, &(data->t_ip), ntopBuffer, sizeof(ntopBuffer)));
-        }
-        else
-        {
-            cli::hexDump((const uint8_t*)arpHeader, arpHeaderSize);
+            printf("  sender MAC   %s %s\n", sMac.toString().c_str(), app::lookupVendor(sMac).name().c_str());
+            printf("  sender addr  %s\n", inet_ntop(AF_INET, &(data->ar_spa), ntopBuffer, sizeof(ntopBuffer)));
+            printf("  target MAC   %s %s\n", tMac.toString().c_str(), app::lookupVendor(tMac).name().c_str());
+            printf("  target addr  %s\n", inet_ntop(AF_INET, &(data->ar_tpa), ntopBuffer, sizeof(ntopBuffer)));
+            printf("\n");
             cli::hexDump(arpData, arpDataSize);
         }
-    }
-    else if (ethProtocol == ETH_P_8021Q)
-    {
-        // extend the Ethernet header
-        const uint16_t ethVlanTpid = ethProtocol;                                     // Tag Protocol Identifier
-        const uint16_t ethVlanTci = omw::bigEndian::decode_ui16(sockData + ETH_HLEN); // Tag Control Information
-        const int ethVlanPcp = ethVlanTci >> 13;                                      // Priority Code Point
-        const int ethVlanDei = (ethVlanTci >> 12) & 0x01;                             // Drop Eligible Indicator
-        const int ethVlanVid = ethVlanTci & 0x0FFF;                                   // VLAN-Identifier
+        else { cli::hexDump(arpData, arpDataSize); }
 
-        const uint16_t ethProtocolEff = omw::bigEndian::decode_ui16(sockData + ETH_HLEN) + 2; // effective protocol (EtherType)
+        printf("\033[39m");
+        fflush(stdout);
 
-        printf("  802.1Q VLAN Extended Header\n");
-        printf("    PCP %i", ethVlanPcp);
-        printf("    DEI %i", ethVlanDei);
-        printf("    VID %i", ethVlanVid);
-
-        if (ethProtocol != ethProtocolEff) { printf("  effective proto \033[31m0x%04x %s\033[39m\n", (int)ethProtocolEff, ethptos(ethProtocolEff).c_str()); }
-
-
-
-        // interpret VLAN data
-        printf("\nVLAN\n");
-        cli::hexDump(ethData, ethDataSize);
+        for (size_t i = 0; i < padDataSize; ++i)
+        {
+            if (padData[i])
+            {
+                printf("\nPadding:\n");
+                cli::hexDump(padData, padDataSize);
+                break;
+            }
+        }
     }
     else
     {
@@ -314,12 +377,14 @@ void level2_sniffer()
         return;
     }
 
-    uint8_t sockData[ETH_FRAME_LEN + 4 /* VLAN */ + ETH_FCS_LEN];
+    uint8_t sockData[ETH_FRAME_LEN + 4 /* VLAN */]; // FCS is not passed up to userspace
     struct sockaddr sockSrcAddr;
     socklen_t sockSrcAddrSize = sizeof(sockSrcAddr);
 
     while (1)
     {
+        memset(sockData, 0, sizeof(sockData));
+
         const ssize_t sockDataSize = recvfrom(sfd, sockData, sizeof(sockData), 0, &sockSrcAddr, &sockSrcAddrSize);
 
         if (sockDataSize < 0) { cli::printErrno("recvfrom() failed", errno); }
@@ -340,9 +405,197 @@ void level2_sniffer()
     close(sfd);
 }
 
+#endif // PRJ_DEBUG - L2 sniffer
+
+
+
+/**
+ * @param addrStr IPv4 address, format: `a.b.c.d`
+ * @param macBuffer uint8_t[6] MAC address buffer
+ * @return 0 on success, negative on error, positive on timeout
+ */
+int impl_scan_xnix(const char* addrStr, uint8_t* macBuffer)
+{
+    char ifname[50];
+    struct sockaddr ifaddr;
+    struct in_addr taddr;
+    if (getifaddr(ifname, sizeof(ifname), &ifaddr, AF_INET, addrStr, &taddr) != 0)
+    {
+        // can't use ARP on remote networks
+        return -(__LINE__);
+    }
+
+    const int sfd = socket(AF_PACKET, SOCK_RAW, htons(ETH_P_ARP));
+    if (sfd < 0)
+    {
+        cli::printErrno("failed to create socket", errno);
+        return -(__LINE__);
+    }
+
+    struct ifreq ifreqha; // hardware address
+    memset(&ifreqha, 0, sizeof(ifreqha));
+    strncpy(ifreqha.ifr_name, ifname, IFNAMSIZ - 1);
+    if (ioctl(sfd, SIOCGIFHWADDR, &ifreqha) < 0)
+    {
+        cli::printErrno("failed to get MAC address of interface \"" + std::string(ifname) + '"', errno);
+        return -(__LINE__);
+    }
+
+    const uint8_t* const localhaddr = (uint8_t*)(ifreqha.ifr_hwaddr.sa_data);        // local hardware address
+    const struct in_addr* const localpaddr = &(((sockaddr_in*)(&ifaddr))->sin_addr); // local protocol address
+    const struct in_addr* const targetpaddr = &taddr;                                // target protocol address
+
+#if PRJ_DEBUG && 0
+    {
+        // also works with `void*`
+        // const void* const localhaddr = ifreqha.ifr_hwaddr.sa_data;
+        // const void* const localpaddr = &(((sockaddr_in*)(&ifaddr))->sin_addr);
+
+        const struct in_addr addr = *((struct in_addr*)localpaddr);
+        // const uint32_t ip = *((uint32_t*)localpaddr);
+        const uint32_t ip = ntohl(*((uint32_t*)localpaddr));
+        const uint32_t a = ip >> 24;
+        const uint32_t b = (ip >> 16) & 0x0FF;
+        const uint32_t c = (ip >> 8) & 0x0FF;
+        const uint32_t d = ip & 0x0FF;
+
+        char addrStr[100];
+        printf("%s   %s   %u.%u.%u.%u 0x%08x, %s\n\n", ifname, mac::EUI48((uint8_t*)localhaddr).toString().c_str(), a, b, c, d, ip,
+               inet_ntop(AF_INET, &addr, addrStr, sizeof(addrStr)));
+    }
+#endif
+
+
+
+    // serialise ARP packet
+
+    constexpr size_t bufferSize = ETH_HLEN + sizeof(struct arphdr) + sizeof(struct arpdata) + /* padding */ 18;
+    static_assert(bufferSize >= ETH_ZLEN, "layer 2 frame has to be at leaset 60 octets + 32bit CRC");
+    uint8_t buffer[bufferSize];
+    memset(buffer, 0, bufferSize);
+
+    struct ethhdr* ethHeader = (struct ethhdr*)(buffer + 0);
+    memset(ethHeader->h_dest, 0xFF, ETH_ALEN); // broadcast
+    memcpy(ethHeader->h_source, &(ifreqha.ifr_hwaddr.sa_data), ETH_ALEN);
+    ethHeader->h_proto = htons(ETH_P_ARP);
+
+    struct arphdr* arpHeader = (struct arphdr*)(buffer + ETH_HLEN);
+    arpHeader->ar_hrd = htons(ARPHRD_ETHER);
+    arpHeader->ar_pro = htons(ETH_P_IP);
+    arpHeader->ar_hln = ARP_HLEN;
+    arpHeader->ar_pln = ARP_PLEN;
+    arpHeader->ar_op = htons(ARPOP_REQUEST);
+
+    struct arpdata* arpData = (struct arpdata*)(buffer + ETH_HLEN + sizeof(struct arphdr));
+    memcpy(arpData->ar_sha, localhaddr, ARP_HLEN);
+    memcpy(arpData->ar_spa, localpaddr, ARP_PLEN);
+    memset(arpData->ar_tha, 0, ARP_HLEN);
+    memcpy(arpData->ar_tpa, targetpaddr, ARP_PLEN);
+
+
+    printL2Packet(buffer, bufferSize, NULL);
+
+
+    close(sfd);
+
+#if PRJ_DEBUG && 1
+    for (size_t i = 0; i < 6; ++i) { macBuffer[i] = 0xFF; }
+    return 0;
+#else // PRJ_DEBUG
+#error "TODO implement" // read doc for return codes
+#endif // PRJ_DEBUG
+}
+
+
+
+/**
+ * Get the network interface for wich `(if.addr ^ dst.addr) & if.mask` is zero.
+ *
+ * Currently only supports IPv4.
+ *
+ * If no interface matches, error is returned.
+ *
+ * @param [out] ifname
+ * @param ifnameSize
+ * @param [out] ifaddr
+ * @param af Used to filter the list of interfaces
+ * @param taddrStr Used to filter the list of interfaces
+ * @param [out] taddr
+ * @return 0 on success, negative on error
+ */
+int getifaddr(char* ifname, size_t ifnameSize, struct sockaddr* ifaddr, int af, const char* taddrStr, struct in_addr* taddr)
+{
+    struct ifaddrs* iflist = NULL;
+    void* pmtaddr = NULL; // polymorph target address
+    struct in6_addr ___taddr6;
+    struct in6_addr* const taddr6 = &___taddr6;
+
+    if (af == AF_INET) { pmtaddr = taddr; }
+    else { pmtaddr = taddr6; } // is ok here, inet_pton() failes if af is neither AF_INET nor AF_INET6
+
+    if (inet_pton(af, taddrStr, pmtaddr) != 1)
+    {
+        cli::printError("invalid " + aftos(af) + " address: " + std::string(taddrStr));
+        return -(__LINE__);
+    }
+
+    if (getifaddrs(&iflist) != 0)
+    {
+        cli::printErrno("failed to get network interfaces", errno);
+        return -(__LINE__);
+    }
+
+    int err = -1;
+    const struct ifaddrs* ifa = iflist;
+    while (ifa && err)
+    {
+        if (ifa->ifa_addr && (ifa->ifa_addr->sa_family == af))
+        {
+            if (af == AF_INET)
+            {
+                const struct sockaddr_in* const sa_addr = ((const struct sockaddr_in*)ifa->ifa_addr);
+                const struct sockaddr_in* const sa_mask = ((const struct sockaddr_in*)ifa->ifa_netmask);
+
+                if ((((sa_addr->sin_addr.s_addr) ^ (taddr->s_addr)) & (sa_mask->sin_addr.s_addr)) == 0)
+                {
+                    strncpy(ifname, ifa->ifa_name, ifnameSize);
+                    *(ifname + ifnameSize - 1) = 0;
+
+                    *ifaddr = *(ifa->ifa_addr);
+
+                    err = 0;
+                }
+            }
+            else if (af == AF_INET6)
+            {
+                const struct sockaddr_in6* const sa_addr6 = ((const struct sockaddr_in6*)ifa->ifa_addr);
+                const struct sockaddr_in6* const sa_mask6 = ((const struct sockaddr_in6*)ifa->ifa_netmask);
+                cli::printError("no IPv6 support in " + std::string(__func__));
+            }
+        }
+
+#if PRJ_DEBUG && 0
+        if (!err || 0)
+        {
+            static int cnt = 0;
+            if (cnt++) { printf("\n"); }
+
+            printf("%s\n", ifa->ifa_name);
+            if (ifa->ifa_addr) { printf("    addr  %s\n", sockaddrtos(ifa->ifa_addr).c_str()); }
+            if (ifa->ifa_netmask) { printf("    mask  %s\n", sockaddrtos(ifa->ifa_netmask).c_str()); }
+            if (ifa->ifa_flags & IFF_BROADCAST) { printf("    broad %s\n", sockaddrtos(ifa->ifa_broadaddr).c_str()); }
+            if (ifa->ifa_flags & IFF_POINTOPOINT) { printf("    dst   %s\n", sockaddrtos(ifa->ifa_dstaddr).c_str()); }
+            // for `ifa->ifa_data` see https://man7.org/linux/man-pages/man3/getifaddrs.3.html
+        }
 #endif // PRJ_DEBUG
 
+        ifa = ifa->ifa_next;
+    }
 
+    freeifaddrs(iflist);
+
+    return err;
+}
 
 /**
  * @brief Address family to string.
@@ -447,7 +700,6 @@ std::string sockaddrtos(const struct sockaddr* sa)
 
     const int af = sa->sa_family;
 
-    // maybe see also https://man7.org/linux/man-pages/man3/getnameinfo.3.html
     switch (af)
     {
     case AF_INET:
@@ -479,6 +731,10 @@ std::string sockaddrtos(const struct sockaddr* sa)
         }
     }
     break;
+
+    case AF_PACKET:
+        str = aftos(af);
+        break;
 
     default:
         str = "sockaddrtos " + aftos(af);

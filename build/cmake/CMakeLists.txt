@@ -45,6 +45,7 @@ set(SOURCES
     ../../src/application/process.cpp
     ../../src/application/result.cpp
     ../../src/application/scan.cpp
+    ../../src/application/scan_xnix.cpp
     ../../src/application/vendor-cache.cpp
     ../../src/application/vendor-lookup.cpp
     ../../src/middleware/cli.cpp

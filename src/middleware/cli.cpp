@@ -61,19 +61,18 @@ void cli::hexDump(const uint8_t* data, size_t count)
 
     for (size_t i = 0; i < count; ++i)
     {
-        using ull_t = unsigned long long;
         const int byte = *(data + i);
         const size_t row = (i / 16);
         const size_t col = (i % 16);
 
         if (col == 0)
         {
-            if (i == 0) { printf("%05llx ", (ull_t)i); }
+            if (i == 0) { printf("%05zx ", i); }
             else
             {
                 char str[17];
                 hdDataToString(str, data + 16 * (row - 1), end);
-                printf("  | %s\n%05llx ", str, (ull_t)i);
+                printf("  | %s\n%05zx ", str, i);
             }
         }
         else if (col == 8) { printf(" "); }

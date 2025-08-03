@@ -25,6 +25,10 @@ copyright       GPL-3.0 - Copyright (c) 2025 Oliver Blaser
 #include <omw/version.h>
 #include <omw/windows/windows.h>
 
+#ifndef _WIN32
+#include <unistd.h>
+#endif
+
 
 #define USE_DEBUG_PATH (1)
 
@@ -148,6 +152,7 @@ static bool changed = false;
 static fs::path getFilePath();
 static void readCacheFile(const fs::path& filepath);
 static void writeCacheFile(const fs::path& filepath);
+static void chownUser(const fs::path& path);
 
 
 
@@ -172,6 +177,8 @@ void app::cache::load()
             try
             {
                 if (!fs::create_directory(parentpath)) { throw -(__LINE__); }
+
+                chownUser(parentpath);
             }
             catch (const std::exception& ex)
             {
@@ -191,7 +198,12 @@ void app::cache::save()
 {
     MTX_LOCK_RD();
 
-    if (changed) { writeCacheFile(getFilePath()); }
+    if (changed)
+    {
+        const auto path = getFilePath();
+        writeCacheFile(path);
+        chownUser(path);
+    }
 
     MTX_UNLOCK_RD();
 }
@@ -573,4 +585,32 @@ void writeCacheFile(const fs::path& filepath)
     {
         cli::printError("failed to write cache file \"" + filepath.u8string() + "\"");
     }
+}
+
+/**
+ * Trys to change the owner of the `path` to the executing user.
+ *
+ * @param path Path to file or directory
+ */
+void chownUser(const fs::path& path)
+{
+#ifndef _WIN32
+    try
+    {
+        const char* envUID = getenv("SUDO_UID");
+        const char* envGID = getenv("SUDO_GID");
+
+        uid_t uid = -1;
+        gid_t gid = -1;
+
+        if (envUID) { uid = std::stoi(envUID); }
+        if (envGID) { gid = std::stoi(envGID); }
+
+        chown(path.u8string().c_str(), uid, gid);
+    }
+    catch (...)
+    {
+        // nop
+    }
+#endif // _WIN32
 }

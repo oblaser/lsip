@@ -157,6 +157,10 @@ void app::cache::load()
 
     const fs::path filepath = getFilePath();
 
+#if OMW_PLAT_WIN && PRJ_DEBUG && 0
+    fs::remove(filepath);
+#endif
+
     if (fs::exists(filepath)) { readCacheFile(filepath); }
     else
     {

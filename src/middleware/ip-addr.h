@@ -213,7 +213,7 @@ private:
 
 static inline std::string cidrString(const ip::Address& addr, const ip::SubnetMask& subnetMask)
 {
-    return addr.toString() + '/' + std::to_string(subnetMask.prefixSize());
+    return (addr.toString() + '/' + std::to_string(subnetMask.prefixSize()));
 }
 
 

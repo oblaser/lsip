@@ -52,7 +52,7 @@ struct ethhdr8021Q
     uint16_t ehq_tpid;
     uint16_t ehq_tci;
     uint16_t ehq_proto;
-} __attribute__((packed, aligned(1)));
+} __attribute__((packed));
 
 #define ARP_HLEN 6 // hardware address length
 #define ARP_PLEN 4 // protocol address length
@@ -69,7 +69,7 @@ struct arpdata
     uint8_t ar_spa[ARP_PLEN]; // sender protocol address
     uint8_t ar_tha[ARP_HLEN]; // target hardware address
     uint8_t ar_tpa[ARP_PLEN]; // target protocol address
-} __attribute__((packed, aligned(1)));
+} __attribute__((packed));
 
 static_assert(ARP_HLEN == ETH_ALEN);
 static_assert(ARP_PLEN == sizeof(struct in_addr));

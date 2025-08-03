@@ -213,7 +213,11 @@ app::Vendor app::cache::get(const mac::Addr& mac)
 
     for (size_t i = 0; (i < rd_ma_s.size()) && !found; ++i)
     {
-        if (oui36 == rd_ma_s[i].oui()) { v = rd_ma_s[i]; }
+        if (oui36 == rd_ma_s[i].oui())
+        {
+            v = rd_ma_s[i];
+            found = true;
+        }
     }
 
 
@@ -222,7 +226,11 @@ app::Vendor app::cache::get(const mac::Addr& mac)
 
     for (size_t i = 0; (i < rd_ma_m.size()) && !found; ++i)
     {
-        if (oui28 == rd_ma_m[i].oui()) { v = rd_ma_m[i]; }
+        if (oui28 == rd_ma_m[i].oui())
+        {
+            v = rd_ma_m[i];
+            found = true;
+        }
     }
 
 
@@ -231,7 +239,11 @@ app::Vendor app::cache::get(const mac::Addr& mac)
 
     for (size_t i = 0; (i < rd_ma_l.size()) && !found; ++i)
     {
-        if (oui == rd_ma_l[i].oui()) { v = rd_ma_l[i]; }
+        if (oui == rd_ma_l[i].oui())
+        {
+            v = rd_ma_l[i];
+            found = true;
+        }
     }
 
 
@@ -315,6 +327,13 @@ static fs::path getEnvVarPath(const std::string& name)
 //======================================================================================================================
 // static
 
+/**
+ * |             | Windows                           | Linux                        |
+ * |:-----------:|:---------------------------------:|:----------------------------:|
+ * | 1st attempt | `%APPDATA%\lsip\vendors.json`     | `~/.cache/lsip/vendors.json` |
+ * | 2st attempt | `%PROGRAMDATA%\lsip\vendors.json` | `~/.lsip/vendors.json`       |
+ * | fallback    | `C:\lsip\vendors.json`            | `/var/tmp/lsip/vendors.json` |
+ */
 fs::path getFilePath()
 {
     static fs::path path;

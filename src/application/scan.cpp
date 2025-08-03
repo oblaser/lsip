@@ -20,7 +20,12 @@ copyright       GPL-3.0 - Copyright (c) 2025 Oliver Blaser
 
 
 
+/**
+ * @param dur_us Duration as microseconds
+ * @return Rounded duration as milliseconds
+ */
 static inline uint32_t convertDuration(omw::clock::timepoint_t dur_us) { return (uint32_t)((dur_us + 500) / 1000); }
+
 static app::ScanResult impl_scan(const ip::Addr4& addr);
 
 
@@ -209,16 +214,11 @@ std::string arpres_to_string(DWORD arp_res)
 
 
 
-extern void level2_sniffer();
 extern int impl_scan_xnix(const char* addrStr, uint8_t* macBuffer);
 
 app::ScanResult impl_scan(const ip::Addr4& addr)
 {
     app::ScanResult r;
-
-#if PRJ_DEBUG && 0
-    level2_sniffer();
-#else // PRJ_DEBUG
 
     uint8_t macBuffer[6];
 
@@ -233,14 +233,9 @@ app::ScanResult impl_scan(const ip::Addr4& addr)
     }
     else
     {
-        if (err > 0)
-        {
-            // nop, timeout
-        }
-        else { cli::printError("failed to scan " + addr.toString() + " (" + std::to_string(err) + ")"); }
+        if (err < 0) { cli::printError("failed to scan " + addr.toString() + " (" + std::to_string(err) + ")"); }
+        // else nop, timeout
     }
-
-#endif // PRJ_DEBUG
 
     return r;
 }

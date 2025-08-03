@@ -25,6 +25,7 @@ copyright       GPL-3.0 - Copyright (c) 2025 Oliver Blaser
 #include <net/ethernet.h>
 #include <net/if.h>
 #include <net/if_arp.h>
+#include <netinet/if_ether.h>
 #include <netinet/ip.h>
 
 #include <sys/ioctl.h>
@@ -32,6 +33,7 @@ copyright       GPL-3.0 - Copyright (c) 2025 Oliver Blaser
 #include <sys/types.h>
 
 #include <ifaddrs.h>
+#include <linux/if_packet.h>
 #include <unistd.h>
 
 
@@ -39,40 +41,6 @@ copyright       GPL-3.0 - Copyright (c) 2025 Oliver Blaser
     case _define:                          \
         str = #_define;                    \
         break
-
-
-
-/**
- * @brief Extended 802.1Q VLAN ethernet header
- */
-struct ethhdr8021Q
-{
-    uint8_t ehq_dest[ETH_ALEN];
-    uint8_t ehq_source[ETH_ALEN];
-    uint16_t ehq_tpid;
-    uint16_t ehq_tci;
-    uint16_t ehq_proto;
-} __attribute__((packed));
-
-#define ARP_HLEN 6 // hardware address length
-#define ARP_PLEN 4 // protocol address length
-
-/**
- * @brief IPv4 ARP data container.
- *
- * - hardware address: MAC/EUI48
- * - protocol address: IPv4 address
- */
-struct arpdata
-{
-    uint8_t ar_sha[ARP_HLEN]; // sender hardware address
-    uint8_t ar_spa[ARP_PLEN]; // sender protocol address
-    uint8_t ar_tha[ARP_HLEN]; // target hardware address
-    uint8_t ar_tpa[ARP_PLEN]; // target protocol address
-} __attribute__((packed));
-
-static_assert(ARP_HLEN == ETH_ALEN);
-static_assert(ARP_PLEN == sizeof(struct in_addr));
 
 
 
@@ -94,6 +62,22 @@ static uint16_t inetChecksum(const uint8_t* data, size_t count);
 #include <netinet/ip_icmp.h>
 #include <netinet/tcp.h>
 #include <netinet/udp.h>
+
+
+
+/**
+ * @brief Extended 802.1Q VLAN ethernet header
+ */
+struct ethhdr8021Q
+{
+    uint8_t ehq_dest[ETH_ALEN];
+    uint8_t ehq_source[ETH_ALEN];
+    uint16_t ehq_tpid;
+    uint16_t ehq_tci;
+    uint16_t ehq_proto;
+} __attribute__((packed));
+
+
 
 static int printL2Packet(const uint8_t* sockData, size_t sockDataSize, const struct sockaddr* sockSrcAddr)
 {
@@ -325,18 +309,18 @@ static int printL2Packet(const uint8_t* sockData, size_t sockDataSize, const str
         cli::hexDump((const uint8_t*)arpHeader, arpHeaderSize);
         printf("\n");
 
-        if ((arpHwType == ARPHRD_ETHER) && (arpProtocol == ETH_P_IP) && (arpHwLength == ARP_HLEN) && (arpProtoLen == ARP_PLEN))
+        if ((arpHwType == ARPHRD_ETHER) && (arpProtocol == ETH_P_IP) && (arpHwLength == ETH_ALEN) && (arpProtoLen == sizeof(((struct ether_arp*)0)->arp_spa)))
         {
-            const struct arpdata* const data = (const struct arpdata*)(arpData + 0);
-            const mac::Addr sMac(data->ar_sha);
-            const mac::Addr tMac(data->ar_tha);
+            const struct ether_arp* const data = (const struct ether_arp*)(ethData + 0);
+            const mac::Addr sMac(data->arp_sha);
+            const mac::Addr tMac(data->arp_tha);
 
             char ntopBuffer[32 + 15 + 1];
 
             printf("  sender MAC   %s %s\n", sMac.toString().c_str(), app::lookupVendor(sMac).name().c_str());
-            printf("  sender addr  %s\n", inet_ntop(AF_INET, &(data->ar_spa), ntopBuffer, sizeof(ntopBuffer)));
+            printf("  sender addr  %s\n", inet_ntop(AF_INET, &(data->arp_spa), ntopBuffer, sizeof(ntopBuffer)));
             printf("  target MAC   %s %s\n", tMac.toString().c_str(), app::lookupVendor(tMac).name().c_str());
-            printf("  target addr  %s\n", inet_ntop(AF_INET, &(data->ar_tpa), ntopBuffer, sizeof(ntopBuffer)));
+            printf("  target addr  %s\n", inet_ntop(AF_INET, &(data->arp_tpa), ntopBuffer, sizeof(ntopBuffer)));
             printf("\n");
             cli::hexDump(arpData, arpDataSize);
         }
@@ -364,6 +348,7 @@ static int printL2Packet(const uint8_t* sockData, size_t sockDataSize, const str
     return 0;
 }
 
+#if 0
 #include <mutex>
 static std::mutex ___mtx;
 void level2_sniffer()
@@ -404,6 +389,7 @@ void level2_sniffer()
 
     close(sfd);
 }
+#endif
 
 #endif // PRJ_DEBUG - L2 sniffer
 
@@ -421,21 +407,29 @@ int impl_scan_xnix(const char* addrStr, uint8_t* macBuffer)
     struct in_addr taddr;
     if (getifaddr(ifname, sizeof(ifname), &ifaddr, AF_INET, addrStr, &taddr) != 0)
     {
-        // can't use ARP on remote networks
+        cli::printWarning("currently only ARP is implemented, devices can't be ARPed through NAT");
         return -(__LINE__);
     }
 
-    const int sfd = socket(AF_PACKET, SOCK_RAW, htons(ETH_P_ARP));
-    if (sfd < 0)
+    const int sockfd = socket(AF_PACKET, SOCK_RAW, htons(ETH_P_ARP));
+    if (sockfd < 0)
     {
         cli::printErrno("failed to create socket", errno);
+        return -(__LINE__);
+    }
+
+    struct ifreq ifreqifindex; // interface index
+    strncpy(ifreqifindex.ifr_name, ifname, IFNAMSIZ - 1);
+    if (ioctl(sockfd, SIOCGIFINDEX, &ifreqifindex) < 0)
+    {
+        cli::printErrno("failed to get index of interface \"" + std::string(ifname) + '"', errno);
         return -(__LINE__);
     }
 
     struct ifreq ifreqha; // hardware address
     memset(&ifreqha, 0, sizeof(ifreqha));
     strncpy(ifreqha.ifr_name, ifname, IFNAMSIZ - 1);
-    if (ioctl(sfd, SIOCGIFHWADDR, &ifreqha) < 0)
+    if (ioctl(sockfd, SIOCGIFHWADDR, &ifreqha) < 0)
     {
         cli::printErrno("failed to get MAC address of interface \"" + std::string(ifname) + '"', errno);
         return -(__LINE__);
@@ -469,7 +463,7 @@ int impl_scan_xnix(const char* addrStr, uint8_t* macBuffer)
 
     // serialise ARP packet
 
-    constexpr size_t bufferSize = ETH_HLEN + sizeof(struct arphdr) + sizeof(struct arpdata) + /* padding */ 18;
+    constexpr size_t bufferSize = ETH_HLEN + sizeof(struct ether_arp) + /* padding */ 18;
     static_assert(bufferSize >= ETH_ZLEN, "layer 2 frame has to be at leaset 60 octets + 32bit CRC");
     uint8_t buffer[bufferSize];
     memset(buffer, 0, bufferSize);
@@ -479,24 +473,54 @@ int impl_scan_xnix(const char* addrStr, uint8_t* macBuffer)
     memcpy(ethHeader->h_source, &(ifreqha.ifr_hwaddr.sa_data), ETH_ALEN);
     ethHeader->h_proto = htons(ETH_P_ARP);
 
-    struct arphdr* arpHeader = (struct arphdr*)(buffer + ETH_HLEN);
-    arpHeader->ar_hrd = htons(ARPHRD_ETHER);
-    arpHeader->ar_pro = htons(ETH_P_IP);
-    arpHeader->ar_hln = ARP_HLEN;
-    arpHeader->ar_pln = ARP_PLEN;
-    arpHeader->ar_op = htons(ARPOP_REQUEST);
+    struct ether_arp* ethArp = (struct ether_arp*)(buffer + ETH_HLEN);
+    ethArp->ea_hdr.ar_hrd = htons(ARPHRD_ETHER);
+    ethArp->ea_hdr.ar_pro = htons(ETH_P_IP);
+    ethArp->ea_hdr.ar_hln = ETH_ALEN;
+    ethArp->ea_hdr.ar_pln = sizeof(((struct ether_arp*)0)->arp_spa);
+    ethArp->ea_hdr.ar_op = htons(ARPOP_REQUEST);
+    memcpy(ethArp->arp_sha, localhaddr, ETH_ALEN);
+    memcpy(ethArp->arp_spa, localpaddr, sizeof(((struct ether_arp*)0)->arp_spa));
+    memset(ethArp->arp_tha, 0, ETH_ALEN);
+    memcpy(ethArp->arp_tpa, targetpaddr, sizeof(((struct ether_arp*)0)->arp_tpa));
 
-    struct arpdata* arpData = (struct arpdata*)(buffer + ETH_HLEN + sizeof(struct arphdr));
-    memcpy(arpData->ar_sha, localhaddr, ARP_HLEN);
-    memcpy(arpData->ar_spa, localpaddr, ARP_PLEN);
-    memset(arpData->ar_tha, 0, ARP_HLEN);
-    memcpy(arpData->ar_tpa, targetpaddr, ARP_PLEN);
-
-
+#if PRJ_DEBUG && 0
     printL2Packet(buffer, bufferSize, NULL);
+#endif
 
 
-    close(sfd);
+
+    // send ARP packet
+
+    ssize_t n, transferred;
+    struct sockaddr_ll dst_addr;
+    dst_addr.sll_family = AF_PACKET;
+    dst_addr.sll_protocol = htons(ETH_P_ARP);
+    dst_addr.sll_ifindex = ifreqifindex.ifr_ifindex;
+    dst_addr.sll_hatype = htons(ARPHRD_ETHER);
+    // dst_addr.sll_pkttype = PACKET_BROADCAST;
+    dst_addr.sll_pkttype = PACKET_OTHERHOST;
+    dst_addr.sll_halen = ETH_ALEN;
+    dst_addr.sll_addr[6] = 0x00;
+    dst_addr.sll_addr[7] = 0x00;
+
+    transferred = 0;
+    while ((size_t)transferred < bufferSize)
+    {
+        n = sendto(sockfd, buffer, bufferSize, 0, (struct sockaddr*)(&dst_addr), sizeof(dst_addr));
+        if (n < 0)
+        {
+            cli::printErrno("failed to send ARP packet for target " + std::string(addrStr), errno);
+            close(sockfd);
+            return -(__LINE__);
+        }
+
+        transferred += n;
+    }
+
+
+
+    close(sockfd);
 
 #if PRJ_DEBUG && 1
     for (size_t i = 0; i < 6; ++i) { macBuffer[i] = 0xFF; }

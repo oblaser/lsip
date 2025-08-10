@@ -48,6 +48,7 @@ set(SOURCES
     ../../src/application/scan_xnix.cpp
     ../../src/application/vendor-cache.cpp
     ../../src/application/vendor-lookup.cpp
+    ../../src/middleware/socket/util.cpp
     ../../src/middleware/cli.cpp
     ../../src/middleware/ip-addr.cpp
     ../../src/middleware/mac-addr.cpp

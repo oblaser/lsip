@@ -1,7 +1,5 @@
 # `lsip`
 
-> _atm only implemented for Windows_
-
 List IP devices.
 
 ```text

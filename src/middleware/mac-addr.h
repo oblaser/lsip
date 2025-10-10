@@ -92,6 +92,9 @@ public:
 
     bool isCID() const { return ((m_buffer[0] & 0x0F) == 0x0A); }
 
+    /**
+     * @param delimiter Octet delimiter character, `\0` to disable.
+     */
     std::string toString(char delimiter = '-') const;
 
 

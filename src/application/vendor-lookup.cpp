@@ -59,24 +59,27 @@ app::cache::Vendor onlineLookup(const mac::Addr& mac)
 
 #if USE_API || !PRJ_DEBUG
 
-    const auto req = curl::Request(curl::Method::GET, "https://www.macvendorlookup.com/api/v2/" + mac.toString() + "/json", 30, 90);
-    const auto curlId = curl::queueRequest(req, curl::Priority::normal);
-    if (curlId.isValid())
+    if (mac.isIndividual() && mac.isUniversal() && (mac != mac::Addr::null))
     {
-        while (!curl::responseReady(curlId)) {}
-        const auto res = curl::popResponse();
-
-        if (res.good()) { vendor = parseApiResponse(res.body()); }
-        else
+        const auto req = curl::Request(curl::Method::GET, "https://www.macvendorlookup.com/api/v2/" + mac.toString() + "/json", 30, 90);
+        const auto curlId = curl::queueRequest(req, curl::Priority::normal);
+        if (curlId.isValid())
         {
-#if PRJ_DEBUG && 1
-            std::cout << res.toString() << std::endl;
-#endif
-        }
-    }
-    else { cli::printError("curl queue ID: " + curlId.toString()); }
+            while (!curl::responseReady(curlId)) {}
+            const auto res = curl::popResponse();
 
-    if (vendor.empty()) { cli::printError("failed to lookup " + mac.toString() + " online"); }
+            if (res.good()) { vendor = parseApiResponse(res.body()); }
+            else
+            {
+#if PRJ_DEBUG && 1
+                std::cout << res.toString() << std::endl;
+#endif
+            }
+        }
+        else { cli::printError("curl queue ID: " + curlId.toString()); }
+
+        if (vendor.empty()) { cli::printError("failed to lookup " + mac.toString() + " online"); }
+    }
 
 #else // USE_API
 

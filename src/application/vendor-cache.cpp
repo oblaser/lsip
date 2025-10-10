@@ -25,6 +25,10 @@ copyright       GPL-3.0 - Copyright (c) 2025 Oliver Blaser
 #include <omw/version.h>
 #include <omw/windows/windows.h>
 
+#ifndef _WIN32
+#include <unistd.h>
+#endif
+
 
 #define USE_DEBUG_PATH (1)
 
@@ -148,6 +152,7 @@ static bool changed = false;
 static fs::path getFilePath();
 static void readCacheFile(const fs::path& filepath);
 static void writeCacheFile(const fs::path& filepath);
+static void chownUser(const fs::path& path);
 
 
 
@@ -156,6 +161,10 @@ void app::cache::load()
     MTX_LOCK_WR();
 
     const fs::path filepath = getFilePath();
+
+#if OMW_PLAT_WIN && PRJ_DEBUG && 0
+    fs::remove(filepath);
+#endif
 
     if (fs::exists(filepath)) { readCacheFile(filepath); }
     else
@@ -168,6 +177,8 @@ void app::cache::load()
             try
             {
                 if (!fs::create_directory(parentpath)) { throw -(__LINE__); }
+
+                chownUser(parentpath);
             }
             catch (const std::exception& ex)
             {
@@ -187,7 +198,12 @@ void app::cache::save()
 {
     MTX_LOCK_RD();
 
-    if (changed) { writeCacheFile(getFilePath()); }
+    if (changed)
+    {
+        const auto path = getFilePath();
+        writeCacheFile(path);
+        chownUser(path);
+    }
 
     MTX_UNLOCK_RD();
 }
@@ -209,7 +225,11 @@ app::Vendor app::cache::get(const mac::Addr& mac)
 
     for (size_t i = 0; (i < rd_ma_s.size()) && !found; ++i)
     {
-        if (oui36 == rd_ma_s[i].oui()) { v = rd_ma_s[i]; }
+        if (oui36 == rd_ma_s[i].oui())
+        {
+            v = rd_ma_s[i];
+            found = true;
+        }
     }
 
 
@@ -218,7 +238,11 @@ app::Vendor app::cache::get(const mac::Addr& mac)
 
     for (size_t i = 0; (i < rd_ma_m.size()) && !found; ++i)
     {
-        if (oui28 == rd_ma_m[i].oui()) { v = rd_ma_m[i]; }
+        if (oui28 == rd_ma_m[i].oui())
+        {
+            v = rd_ma_m[i];
+            found = true;
+        }
     }
 
 
@@ -227,7 +251,11 @@ app::Vendor app::cache::get(const mac::Addr& mac)
 
     for (size_t i = 0; (i < rd_ma_l.size()) && !found; ++i)
     {
-        if (oui == rd_ma_l[i].oui()) { v = rd_ma_l[i]; }
+        if (oui == rd_ma_l[i].oui())
+        {
+            v = rd_ma_l[i];
+            found = true;
+        }
     }
 
 
@@ -311,6 +339,13 @@ static fs::path getEnvVarPath(const std::string& name)
 //======================================================================================================================
 // static
 
+/**
+ * |             | Windows                           | Linux                        |
+ * |:-----------:|:---------------------------------:|:----------------------------:|
+ * | 1st attempt | `%APPDATA%\lsip\vendors.json`     | `~/.cache/lsip/vendors.json` |
+ * | 2st attempt | `%PROGRAMDATA%\lsip\vendors.json` | `~/.lsip/vendors.json`       |
+ * | fallback    | `C:\lsip\vendors.json`            | `/var/tmp/lsip/vendors.json` |
+ */
 fs::path getFilePath()
 {
     static fs::path path;
@@ -550,4 +585,32 @@ void writeCacheFile(const fs::path& filepath)
     {
         cli::printError("failed to write cache file \"" + filepath.u8string() + "\"");
     }
+}
+
+/**
+ * Trys to change the owner of the `path` to the executing user.
+ *
+ * @param path Path to file or directory
+ */
+void chownUser(const fs::path& path)
+{
+#ifndef _WIN32
+    try
+    {
+        const char* envUID = getenv("SUDO_UID");
+        const char* envGID = getenv("SUDO_GID");
+
+        uid_t uid = -1;
+        gid_t gid = -1;
+
+        if (envUID) { uid = std::stoi(envUID); }
+        if (envGID) { gid = std::stoi(envGID); }
+
+        chown(path.u8string().c_str(), uid, gid);
+    }
+    catch (...)
+    {
+        // nop
+    }
+#endif // _WIN32
 }

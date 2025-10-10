@@ -10,7 +10,7 @@ copyright       GPL-3.0 - Copyright (c) 2025 Oliver Blaser
 #include <cstddef>
 #include <cstdint>
 
-#include "application/result.h"
+#include "application/vendor.h"
 #include "middleware/mac-addr.h"
 
 

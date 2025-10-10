@@ -16,12 +16,14 @@ copyright       GPL-3.0 - Copyright (c) 2025 Oliver Blaser
 
 #include <curl-thread/curl.h>
 #include <omw/cli.h>
+#include <omw/defs.h>
 #include <omw/windows/windows.h>
 
 
 using std::cout;
 using std::endl;
 using std::setw;
+
 
 
 namespace argstr {
@@ -129,6 +131,13 @@ void printVersion()
 
 
 
+#if (OMW_PLAT_UNIX || OMW_PLAT_LINUX || OMW_PLAT_APPLE) // *nix
+extern int xnix_init();
+extern void xnix_deinit();
+#endif
+
+
+
 int main(int argc, char** argv)
 {
     std::vector<std::string> rawArgs(argc);
@@ -204,16 +213,35 @@ int main(int argc, char** argv)
             app::cache::load();
             std::thread thread_curl = std::thread(curl::thread);
 
-            for (size_t i = 0; i < args.size(); ++i)
-            {
-                const auto& arg = args[i];
+            const int err =
+#if (OMW_PLAT_UNIX || OMW_PLAT_LINUX || OMW_PLAT_APPLE) // *nix
+                xnix_init();
+#else
+                0;
+#endif
 
-                if (!argstr::isOption(arg))
+
+
+            if (!err)
+            {
+                for (size_t i = 0; i < args.size(); ++i)
                 {
-                    const int err = app::process(arg);
-                    if (err) { r = EC_ERROR; }
+                    const auto& arg = args[i];
+
+                    if (!argstr::isOption(arg))
+                    {
+                        const int err = app::process(arg);
+                        if (err) { r = EC_ERROR; }
+                    }
                 }
             }
+            else { r = EC_ERROR; }
+
+
+
+#if (OMW_PLAT_UNIX || OMW_PLAT_LINUX || OMW_PLAT_APPLE) // *nix
+            xnix_deinit();
+#endif
 
             curl::shutdown();
             thread_curl.join();

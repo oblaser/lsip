@@ -44,6 +44,20 @@ static int sendArpRequest(const char* addrStr, const char* ifname, const struct 
 
 
 
+int xnix_init()
+{
+    int r = 0;
+
+    cli::printError(__func__);
+    r = -(__LINE__);
+
+    return r;
+}
+
+void xnix_deinit() { cli::printWarning(__func__); }
+
+
+
 /**
  * @param addrStr IPv4 address, format: `a.b.c.d`
  * @param [out] macBuffer MAC address buffer

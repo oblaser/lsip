@@ -220,7 +220,7 @@ app::ScanResult impl_scan(const ip::Addr4& addr)
 {
     app::ScanResult r;
 
-    uint8_t macBuffer[6];
+    uint8_t macBuffer[mac::EUI48::octet_count];
 
     omw::clock::timepoint_t dur_us = omw::clock::now();
     const int err = impl_scan_xnix(addr.toString().c_str(), macBuffer);

@@ -21,7 +21,12 @@ copyright       GPL-3.0 - Copyright (c) 2025 Oliver Blaser
 
 
 
-#define AF_STRLEN 14
+#define MAC_ADDRSTRLEN   18
+#define AF_STRLEN        14
+#define ETH_P_STRLEN     17
+#define IPPROTO_STRLEN   17
+#define ICMP_TYPE_STRLEN 15
+#define SOCKADDRSTRLEN   54
 
 #define SGR_BLACK           "\033[30m"
 #define SGR_RED             "\033[31m"
@@ -52,19 +57,19 @@ namespace sock {
  *
  * Currently only supports IPv4.
  *
- * If no interface matches, error is returned.
- *
  * @param [out] ifname
  * @param ifnameSize
  * @param [out] ifaddr
  * @param af Used to filter the list of interfaces
  * @param taddrStr Used to filter the list of interfaces
  * @param [out] taddr
- * @return 0 on success, negative on error
+ * @return 0 on success, negative on error, 1 if no interface matches
  */
 int getifaddr(char* ifname, size_t ifnameSize, struct sockaddr* ifaddr, int af, const char* taddrStr, struct in_addr* taddr);
 
 int sendArpRequest(const char* addrStr, const char* ifname, const struct sockaddr* ifaddr, const struct in_addr* taddr);
+
+int sendEchoRequest();
 
 
 namespace util {
@@ -74,7 +79,7 @@ namespace util {
 #define ARPDATA_PLEN (4) // protocol address length
 
     /**
-     * @brief IPv4 ARP data container.
+     * @brief Ethernet IPv4 ARP data container.
      *
      * - hardware address: MAC/EUI48
      * - protocol address: IPv4 address
@@ -139,6 +144,11 @@ namespace util {
      * @param proto `IPPROTO_*`
      */
     std::string ipptos(uint32_t proto);
+
+    /**
+     * @brief ICMP type to string.
+     */
+    std::string icmpttos(uint8_t type);
 
     /**
      * Converts a `sockaddr` to it's string representation, according to it's family.

@@ -26,6 +26,7 @@ copyright       GPL-3.0 - Copyright (c) 2025 Oliver Blaser
 #include <net/if_arp.h>
 #include <netinet/if_ether.h>
 #include <netinet/ip.h>
+#include <netinet/ip_icmp.h>
 
 #include <sys/ioctl.h>
 #include <sys/socket.h>
@@ -60,13 +61,15 @@ int sock::getifaddr(char* ifname, size_t ifnameSize, struct sockaddr* ifaddr, in
         return -(__LINE__);
     }
 
+    taddr->s_addr = ntohl(taddr->s_addr);
+
     if (getifaddrs(&iflist) != 0)
     {
         cli::printErrno("failed to get network interfaces", errno);
         return -(__LINE__);
     }
 
-    int err = -1;
+    int err = 1;
     const struct ifaddrs* ifa = iflist;
     while (ifa && err)
     {
@@ -233,6 +236,13 @@ int sock::sendArpRequest(const char* addrStr, const char* ifname, const struct s
 
 
     close(sockfd);
+
+    return 0;
+}
+
+int sock::sendEchoRequest()
+{
+    // TODO implement
 
     return 0;
 }
@@ -407,6 +417,38 @@ std::string sock::util::ipptos(uint32_t proto)
         if (proto <= 0xFF) { str = "IPPROTO_#" + omw::toHexStr((uint8_t)proto) + 'h'; }
         else { str = "IPPROTO_#" + omw::toHexStr(proto) + 'h'; }
         break;
+    }
+
+    return str;
+}
+
+std::string sock::util::icmpttos(uint8_t type)
+{
+    std::string str;
+
+    switch (type)
+    {
+        SWITCH_CASE_DEFINE_TO_STR(ICMP_ECHOREPLY);
+        SWITCH_CASE_DEFINE_TO_STR(ICMP_DEST_UNREACH);
+        SWITCH_CASE_DEFINE_TO_STR(ICMP_SOURCE_QUENCH);
+        SWITCH_CASE_DEFINE_TO_STR(ICMP_REDIRECT);
+        SWITCH_CASE_DEFINE_TO_STR(ICMP_ECHO);
+        SWITCH_CASE_DEFINE_TO_STR(ICMP_TIME_EXCEEDED);
+        SWITCH_CASE_DEFINE_TO_STR(ICMP_PARAMETERPROB);
+        SWITCH_CASE_DEFINE_TO_STR(ICMP_TIMESTAMP);
+        SWITCH_CASE_DEFINE_TO_STR(ICMP_TIMESTAMPREPLY);
+        SWITCH_CASE_DEFINE_TO_STR(ICMP_INFO_REQUEST);
+        SWITCH_CASE_DEFINE_TO_STR(ICMP_INFO_REPLY);
+        SWITCH_CASE_DEFINE_TO_STR(ICMP_ADDRESS);
+        SWITCH_CASE_DEFINE_TO_STR(ICMP_ADDRESSREPLY);
+
+    default:
+    {
+        static_assert(ICMP_TYPE_STRLEN >= 11, "increase ICMP_TYPE_STRLEN");
+
+        str = "ICMP_#" + omw::toHexStr(type) + 'h';
+    }
+    break;
     }
 
     return str;

@@ -8,6 +8,7 @@ copyright       GPL-3.0 - Copyright (c) 2025 Oliver Blaser
 #include <cstdint>
 #include <mutex>
 #include <thread>
+#include <vector>
 
 #include "middleware/cli.h"
 #include "middleware/mac-addr.h"
@@ -47,7 +48,39 @@ copyright       GPL-3.0 - Copyright (c) 2025 Oliver Blaser
 
 
 
+constexpr omw::clock::timepoint_t timeout_arp_s = 5;
+constexpr omw::clock::timepoint_t timeout_icmp_s = 60;
+
+
+
 namespace sniffer {
+
+class Resolution
+{
+public:
+    Resolution()
+        : mac(), ip{ .s_addr = 0 }
+    {}
+
+    Resolution(const mac::EUI48& _mac, const struct in_addr* _ip)
+        : mac(_mac), ip{ .s_addr = 0 }
+    {
+        if (_ip) { this->ip.s_addr = _ip->s_addr; }
+    }
+
+    Resolution(const uint8_t* _macData, const struct in_addr* _ip)
+        : mac(_macData), ip{ .s_addr = 0 }
+    {
+        if (_ip) { this->ip.s_addr = _ip->s_addr; }
+    }
+
+    virtual ~Resolution() {}
+
+    bool isNull() const { return ((this->mac == mac::EUI48::null) && (this->ip.s_addr == 0)); }
+
+    mac::EUI48 mac;
+    struct in_addr ip;
+};
 
 class SharedData : public thread::ThreadCtl
 {
@@ -63,10 +96,12 @@ public:
     int error() const { lock_guard lg(m_mtx); return m_error; }
     // clang-format on
 
+    Resolution popResolution(const struct in_addr* ip);
 
 private:
-    int m_error;
     mutable std::mutex m_mtx;
+    int m_error;
+    std::vector<Resolution> m_res;
 
 public:
     // thread intern
@@ -74,6 +109,8 @@ public:
     // clang-format off
     void setError(int error) { lock_guard lg(m_mtx); m_error = error; }
     // clang-format on
+
+    void pushResolution(const Resolution& res);
 };
 
 static SharedData sd = SharedData();
@@ -116,22 +153,38 @@ int impl_scan_xnix(const char* addrStr, uint8_t* macBuffer)
 
 
 
+    // wireshark filters
+    // (icmp && ip == x.x.x.x) || (arp && eth == xx:xx:xx:xx:xx:xx)
+    // (icmp && ip.src == x.x.x.x) || (arp && eth.src == xx:xx:xx:xx:xx:xx)
+    // (icmp && ip.dst == x.x.x.x) || (arp && eth.dst == xx:xx:xx:xx:xx:xx)
+
+
+
+    bool isArp = false;
+
     char ifname[50];
     struct sockaddr ifaddr;
     struct in_addr taddr;
     err = sock::getifaddr(ifname, sizeof(ifname), &ifaddr, AF_INET, addrStr, &taddr);
-    if (err)
+    if (err == 1)
     {
-        cli::printWarning("currently only ARP is implemented, devices can't be ARPed through NAT");
-        return -(__LINE__);
+        isArp = false;
+        err = sock::sendEchoRequest();
+        if (err) { return (err * 1000000) + -(__LINE__); }
     }
+    else if (err == 0)
+    {
+        isArp = true;
+        err = sock::sendArpRequest(addrStr, ifname, &ifaddr, &taddr);
+        if (err) { return (err * 1000000) + -(__LINE__); }
+    }
+    else { return -(__LINE__); }
 
-    err = sock::sendArpRequest(addrStr, ifname, &ifaddr, &taddr);
-    if (err)
-    {
-        // error print is done in sendArpRequest()
-        return err;
-    }
+
+
+#if PRJ_DEBUG && 1
+    printf("scanning %s\n", addrStr);
+#endif // PRJ_DEBUG
 
 
 
@@ -140,23 +193,17 @@ int impl_scan_xnix(const char* addrStr, uint8_t* macBuffer)
     while (1)
     {
         // timeout
-        if (omw::clock::elapsed_ms(omw::clock::now(), tpStart, 30 * omw::clock::second_ms))
+        if (omw::clock::elapsed_ms(omw::clock::now(), tpStart, (isArp ? timeout_arp_s : timeout_icmp_s) * omw::clock::second_ms))
         {
             r = 1;
             break;
         }
 
-#if PRJ_DEBUG
-        auto tryPop = [](const in_addr* taddr, uint8_t* macBuffer) {
-            // TODO check for `sniffer::sd.error()`
-            sleep(1);
-            return false;
-        };
-#endif
-
-        // check if result is available
-        if (tryPop(&taddr, macBuffer))
+        const sniffer::Resolution res = sniffer::sd.popResolution(&taddr);
+        if (!res.isNull())
         {
+            for (size_t i = 0; i < res.mac.size(); ++i) { macBuffer[i] = res.mac[i]; }
+
             r = 0;
             break;
         }
@@ -173,10 +220,50 @@ int impl_scan_xnix(const char* addrStr, uint8_t* macBuffer)
 
 
 
+namespace sniffer {
+
+Resolution SharedData::popResolution(const struct in_addr* ip)
+{
+    lock_guard lg(m_mtx);
+
+    Resolution res = Resolution();
+
+    for (size_t i = 0; i < m_res.size(); ++i)
+    {
+        if (m_res[i].ip.s_addr == ip->s_addr)
+        {
+            res = m_res[i];
+            m_res.erase(m_res.begin() + i);
+
+#if PRJ_DEBUG && 01
+            char buffer[100];
+            const uint32_t net_saddr = htonl(res.ip.s_addr);
+            printf("popped (%zu) %15s %s\n", m_res.size(), inet_ntop(AF_INET, &net_saddr, buffer, sizeof(buffer)), res.mac.toString().c_str());
+#endif // PRJ_DEBUG
+
+            break;
+        }
+    }
+
+    return res;
+}
+
+void SharedData::pushResolution(const Resolution& res)
+{
+    lock_guard lg(m_mtx);
+
+#if PRJ_DEBUG && 1
+    char buffer[100];
+    const uint32_t net_saddr = htonl(res.ip.s_addr);
+    printf(SGR_BBLACK "resolution #%zu: %15s %s" SGR_DEFAULT "\n", m_res.size(), inet_ntop(AF_INET, &net_saddr, buffer, sizeof(buffer)),
+           res.mac.toString().c_str());
+#endif // PRJ_DEBUG
+
+    m_res.push_back(res);
+}
+
 static void handlePacket_arp(const uint8_t* data, size_t size)
 {
-    using sock::util::arpdata;
-
     const struct arphdr* const arpHeader = (const struct arphdr*)(data);
     const size_t arpHeaderSize = 8;
     const uint16_t arpHwType = ntohs(arpHeader->ar_hrd);
@@ -185,92 +272,143 @@ static void handlePacket_arp(const uint8_t* data, size_t size)
     const uint8_t arpProtoLen = arpHeader->ar_pln;
     const uint16_t arpOperation = ntohs(arpHeader->ar_op);
     const uint8_t* const arpData = data + arpHeaderSize;
+    // const size_t arpDataSize = 2 * arpHwLength + 2 * arpProtoLen;
+    // const uint8_t* const padData = data + arpHeaderSize + arpDataSize; // padding
+    // const size_t padDataSize = size - arpHeaderSize - arpDataSize;     // padding
+
+
+
+#if PRJ_DEBUG && 0
+
+#define SGR_ARP SGR_BYELLOW
+
     const size_t arpDataSize = 2 * arpHwLength + 2 * arpProtoLen;
     const uint8_t* const padData = data + arpHeaderSize + arpDataSize; // padding
     const size_t padDataSize = size - arpHeaderSize - arpDataSize;     // padding
 
     char buffer[100];
 
-#define SGR_ARP SGR_BGREEN
-
     printf(SGR_ARP);
 
     printf("ARP\n");
-    printf("  hw type   %i %s\n", (int)arpHwType, (arpHwType == ARPHRD_ETHER ? "ETH" : ""));
-    printf("  proto     0x%04x %s\n", (int)arpProtocol, sock::util::ethptos(arpProtocol).c_str());
-    printf("  hw length %i\n", (int)arpHwLength);
-    printf("  proto len %i\n", (int)arpProtoLen);
+    // printf("  hw type   %i %s\n", (int)arpHwType, (arpHwType == ARPHRD_ETHER ? "ETH" : ""));
+    // printf("  proto     0x%04x %s\n", (int)arpProtocol, sock::util::ethptos(arpProtocol).c_str());
+    // printf("  hw length %i\n", (int)arpHwLength);
+    // printf("  proto len %i\n", (int)arpProtoLen);
     printf("  operation %i %s\n", (int)arpOperation, (arpOperation == 1 ? "request" : (arpOperation == 2 ? "reply" : "")));
-    printf("  hdr size  %zu\n", arpHeaderSize);
-    printf("  data size %zu + %zu pad\n", arpDataSize, padDataSize);
-
-    // hexDump((const uint8_t*)arpHeader, arpHeaderSize);
+    // printf("  hdr size  %zu\n", arpHeaderSize);
+    // printf("  data size %zu + %zu pad\n", arpDataSize, padDataSize);
+    //
+    //// hexDump((const uint8_t*)arpHeader, arpHeaderSize);
     // printf("\n");
 
-    if ((arpHwType == ARPHRD_ETHER) && (arpProtocol == ETH_P_IP) && (arpHwLength == ARPDATA_HLEN) && (arpProtoLen == ARPDATA_PLEN))
     {
-        const struct arpdata* const arpdata = (const struct arpdata*)(arpData);
-        const uint8_t* sMacData = arpdata->ar_sha;
-        const uint8_t* tMacData = arpdata->ar_tha;
-
-        const mac::EUI48 sMac(sMacData);
-        const mac::EUI48 tMac(tMacData);
+        const struct sock::util::arpdata* const arpdata = (const struct sock::util::arpdata*)(arpData);
+        const uint8_t* sMac = arpdata->ar_sha;
+        const uint8_t* tMac = arpdata->ar_tha;
 
         char buffer[100];
 
-        printf("  sender MAC   %s\n", sMac.toString().c_str());
+        auto mactos = [](const uint8_t* mac, char* dst, size_t size) {
+            char* r = NULL;
+            const size_t res = (size_t)snprintf(dst, size, "%02x-%02x-%02x-%02x-%02x-%02x", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+            if (res < size) { r = dst; }
+            return r;
+        };
+
+        printf("  sender MAC   %s\n", mactos(sMac, buffer, sizeof(buffer)));
         printf("  sender addr  %s\n", inet_ntop(AF_INET, &(arpdata->ar_spa), buffer, sizeof(buffer)));
-        printf("  target MAC   %s\n", tMac.toString().c_str());
+        printf("  target MAC   %s\n", mactos(tMac, buffer, sizeof(buffer)));
         printf("  target addr  %s\n", inet_ntop(AF_INET, &(arpdata->ar_tpa), buffer, sizeof(buffer)));
 
         // hexDump(arpData, arpDataSize);
     }
-    else
-    {
-        // hexDump(arpData, arpDataSize);
-    }
 
-    printf(SGR_DEFAULT);
+    printf("\n");
     fflush(stdout);
 
-    // printPacket_padding(padData, padDataSize);
+#endif // PRJ_DEBUG
+
+
+
+    if ((arpHwType == ARPHRD_ETHER) && (arpProtocol == ETH_P_IP) && (arpHwLength == ARPDATA_HLEN) && (arpProtoLen == ARPDATA_PLEN) &&
+        (arpOperation == ARPOP_REPLY))
+    {
+        const struct sock::util::arpdata* const arpdata = (const struct sock::util::arpdata*)(arpData);
+
+        const uint8_t* sMacData = arpdata->ar_sha;
+        const in_addr sIpAddr = {
+            .s_addr = ((uint32_t)(arpdata->ar_spa[0]) << 24) | ((uint32_t)(arpdata->ar_spa[1]) << 16) | ((uint32_t)(arpdata->ar_spa[2]) << 8) |
+                      ((uint32_t)(arpdata->ar_spa[3]) << 0),
+        };
+
+        sd.pushResolution(Resolution(sMacData, &sIpAddr));
+    }
 }
 
-static void handlePacket_icmp(const uint8_t* data, size_t size)
+static void handlePacket_icmp(const struct in_addr* saddr, const uint8_t* data, size_t size)
 {
     const struct icmphdr* const icmpHeader = (const struct icmphdr*)(data);
     const size_t icmpHeaderSize = 8;
     const uint8_t icmpType = icmpHeader->type;
-    const uint8_t icmpCode = icmpHeader->code;
-    const uint16_t icmpCheck = ntohs(icmpHeader->checksum);
-    // ...
-    __attribute__((unused)) const uint8_t* const icmpData = data + icmpHeaderSize;
-    __attribute__((unused)) const size_t icmpDataSize = size - icmpHeaderSize;
-    __attribute__((unused)) const uint8_t* const padData = data + icmpHeaderSize + icmpDataSize; // potential padding
-    __attribute__((unused)) const size_t padDataSize = size - icmpHeaderSize - icmpDataSize;     // potential padding
+    // const uint8_t icmpCode = icmpHeader->code;
+    // const uint16_t icmpCheck = ntohs(icmpHeader->checksum);
+    // const uint8_t* const icmpData = data + icmpHeaderSize;
+    const size_t icmpDataSize = size - icmpHeaderSize;
+    // const uint8_t* const padData = data + icmpHeaderSize + icmpDataSize; // potential padding
+    // const size_t padDataSize = size - icmpHeaderSize - icmpDataSize;     // potential padding
 
     const uint16_t icmpCheckCalc = sock::util::inet_checksum(data, icmpHeaderSize + icmpDataSize);
+    const bool checksumOk = (icmpCheckCalc == 0);
 
-    char buffer[100];
+
+
+#if PRJ_DEBUG && 0
 
 #define SGR_ICMP SGR_BCYAN
 
+    const uint8_t icmpCode = icmpHeader->code;
+    const uint16_t icmpCheck = ntohs(icmpHeader->checksum);
+    const uint8_t* const padData = data + icmpHeaderSize + icmpDataSize; // potential padding
+    const size_t padDataSize = size - icmpHeaderSize - icmpDataSize;     // potential padding
+
+    char buffer[100];
+
     printf(SGR_ICMP);
 
-    printf("ICMP\n");
-    printf("  type      %i %s\n", (int)icmpType, ""); // icmpttos(icmpType, buffer, sizeof(buffer)));
+    const uint32_t net_saddr = htonl(saddr->s_addr);
+    printf("ICMP from %s\n", inet_ntop(AF_INET, &net_saddr, buffer, sizeof(buffer)));
+    printf("  type      %i %s\n", (int)icmpType, sock::util::icmpttos(icmpType).c_str());
     printf("  code      %i\n", (int)icmpCode);
     printf("  check     %s0x%04x" SGR_ICMP "\n", ((icmpCheckCalc == 0) ? "" : SGR_RED), (int)icmpCheck);
     printf("  hdr size  %zu\n", icmpHeaderSize);
     printf("  data size %zu + %zu pad\n", icmpDataSize, padDataSize);
 
-    // hexDump((const uint8_t*)icmpHeader, icmpHeaderSize);
-
     printf(SGR_DEFAULT);
     fflush(stdout);
+
+#endif // PRJ_DEBUG
+
+
+
+    if (icmpType == ICMP_ECHOREPLY)
+    {
+        if (!checksumOk)
+        {
+            const struct sockaddr_in tmp = {
+                .sin_family = AF_INET,
+                .sin_port = 0,
+                .sin_addr = { .s_addr = saddr->s_addr },
+            };
+
+            cli::printWarning("invalid IP checksum for echo reply from " + sock::util::sockaddrtos(&tmp));
+        }
+
+        sd.pushResolution(Resolution(mac::EUI48(), saddr));
+    }
 }
 
-void sniffer::thread()
+void thread()
 {
     const int sockfd = socket(AF_PACKET, SOCK_RAW, htons(ETH_P_ALL));
     if (sockfd < 0)
@@ -311,33 +449,21 @@ void sniffer::thread()
             const struct ethhdr* const ethHeader = (const struct ethhdr*)(sockData);
             const uint16_t ethProtocol = ntohs(ethHeader->h_proto);
             const size_t ethHeaderSize = ((ethProtocol == ETH_P_8021Q) ? (ETH_HLEN + 4) : (ETH_HLEN));
-            __attribute__((unused)) const uint8_t* const ethData = sockData + ethHeaderSize;
-            __attribute__((unused)) const size_t ethDataSize = sockDataSize - ethHeaderSize;
+            const uint8_t* const ethData = sockData + ethHeaderSize;
+            const size_t ethDataSize = sockDataSize - ethHeaderSize;
 
             const struct iphdr* const ipHeader = (const struct iphdr*)(ethData);
             const uint8_t ipIhl = ipHeader->ihl;
             const size_t ipHeaderSize = ipIhl * 4u;
             const uint8_t ipProtocol = ipHeader->protocol;
-            __attribute__((unused)) const uint8_t* const ipData = ethData + ipHeaderSize;
-            __attribute__((unused)) const size_t ipDataSize = ethDataSize - ipHeaderSize;
-
-            const uint16_t ipCheckCalc = sock::util::inet_checksum(ethData, ipHeaderSize);
-
-            struct sock::util::ippseudohdr ___pseudoHdr;
-            const struct sock::util::ippseudohdr* const pseudoHdr = &___pseudoHdr;
-            ippseudohdr_init(&___pseudoHdr, ipHeader);
-
-            __attribute__((unused)) uint16_t srcPort = 0;
-            __attribute__((unused)) uint16_t dstPort = 0;
-            __attribute__((unused)) uint8_t icmpType;
-
-            __attribute__((unused)) bool checksumOk = true;
-            if (ipCheckCalc != 0) { checksumOk = false; }
+            const struct in_addr saddr = { .s_addr = ntohl(ipHeader->saddr) };
+            const uint8_t* const ipData = ethData + ipHeaderSize;
+            const size_t ipDataSize = ethDataSize - ipHeaderSize;
 
 
 
             if (ethProtocol == ETH_P_ARP) { handlePacket_arp(ethData, ethDataSize); }
-            else if ((ethProtocol == ETH_P_IP) && (ipProtocol == IPPROTO_ICMP)) { handlePacket_icmp(ethData, ethDataSize); }
+            else if ((ethProtocol == ETH_P_IP) && (ipProtocol == IPPROTO_ICMP)) { handlePacket_icmp(&saddr, ipData, ipDataSize); }
         }
     }
 
@@ -346,6 +472,8 @@ void sniffer::thread()
     errno = 0;
     if (close(sockfd) != 0) { cli::printErrno("close socket failed", errno); }
 }
+
+} // namespace sniffer
 
 
 

@@ -239,6 +239,101 @@ int sock::sendArpRequest(const char* addrStr, const char* ifname, const struct s
 
 
 
+struct sock::util::ippseudohdr* sock::util::ippseudohdr_init(struct sock::util::ippseudohdr* dst, const struct iphdr* iphdr)
+{
+    struct sockaddr_in* dst_saddr = (struct sockaddr_in*)(&(dst->saddr));
+    dst_saddr->sin_family = AF_INET;
+    dst_saddr->sin_port = 0;
+    dst_saddr->sin_addr.s_addr = iphdr->saddr;
+
+    struct sockaddr_in* dst_daddr = (struct sockaddr_in*)(&(dst->daddr));
+    dst_daddr->sin_family = AF_INET;
+    dst_daddr->sin_port = 0;
+    dst_daddr->sin_addr.s_addr = iphdr->daddr;
+
+    dst->protocol = iphdr->protocol;
+
+    dst->length = ntohs(iphdr->tot_len) - ((uint16_t)(iphdr->ihl) * 4);
+
+    return dst;
+}
+
+uint16_t sock::util::inet_checksum(const uint8_t* data, size_t count)
+{
+    uint32_t sum = 0;
+
+    while (count > 1)
+    {
+        sum += (((uint16_t)(*data) << 8) | (uint16_t)(*(data + 1)));
+
+        data += 2;
+        count -= 2;
+    }
+
+    if (count > 0) { sum += (uint32_t)(*data) << 8; }
+
+    sum = (sum & 0x0000FFFF) + (sum >> 16);
+
+    return (uint16_t)(~sum);
+}
+
+void sock::util::inet_checksum_update(uint32_t* sum, const uint8_t* data, size_t count)
+{
+    while (count > 1)
+    {
+        *sum += (((uint16_t)(*data) << 8) | (uint16_t)(*(data + 1)));
+
+        data += 2;
+        count -= 2;
+    }
+
+    if (count > 0) { *sum += (uint32_t)(*data) << 8; }
+}
+
+void sock::util::inet_checksum_update_ippseudohdr(uint32_t* sum, const struct sock::util::ippseudohdr* pseudoHdr)
+{
+    const int af = pseudoHdr->saddr.ss_family;
+
+    switch (af)
+    {
+    case AF_INET:
+    {
+        const struct sockaddr_in* saddr = (struct sockaddr_in*)(&(pseudoHdr->saddr));
+        const struct sockaddr_in* daddr = (struct sockaddr_in*)(&(pseudoHdr->daddr));
+
+        inet_checksum_update32n(sum, saddr->sin_addr.s_addr);
+        inet_checksum_update32n(sum, daddr->sin_addr.s_addr);
+        inet_checksum_update16h(sum, (uint16_t)(pseudoHdr->protocol));
+        inet_checksum_update16h(sum, (uint16_t)(pseudoHdr->length));
+    }
+    break;
+
+    case AF_INET6:
+    {
+        const struct sockaddr_in6* saddr = (struct sockaddr_in6*)(&(pseudoHdr->saddr));
+        const struct sockaddr_in6* daddr = (struct sockaddr_in6*)(&(pseudoHdr->daddr));
+
+        fprintf(stderr, SGR_BRED "error:" SGR_DEFAULT " %s does not yet support IPv6", __func__);
+        (void)saddr;
+        (void)daddr;
+        inet_checksum_update32h(sum, pseudoHdr->length);
+        inet_checksum_update16h(sum, (uint16_t)(pseudoHdr->protocol));
+    }
+    break;
+
+    default:
+        fprintf(stderr, SGR_BRED "error:" SGR_DEFAULT " %s does not support %s", __func__, aftos(af).c_str());
+        break;
+    }
+}
+
+uint16_t inet_checksum_final(uint32_t* sum)
+{
+    *sum = ~((*sum & 0x0000FFFF) + (*sum >> 16));
+    return (uint16_t)(*sum);
+}
+
+
 std::string sock::util::aftos(int af)
 {
     std::string str;

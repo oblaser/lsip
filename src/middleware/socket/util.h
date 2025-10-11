@@ -15,8 +15,32 @@ copyright       GPL-3.0 - Copyright (c) 2025 Oliver Blaser
 #if (OMW_PLAT_UNIX || OMW_PLAT_LINUX || OMW_PLAT_APPLE) // *nix
 
 #include <netinet/in.h>
+#include <netinet/ip.h>
 
 #include <sys/socket.h>
+
+
+
+#define AF_STRLEN 14
+
+#define SGR_BLACK           "\033[30m"
+#define SGR_RED             "\033[31m"
+#define SGR_GREEN           "\033[32m"
+#define SGR_YELLOW          "\033[33m"
+#define SGR_BLUE            "\033[34m"
+#define SGR_MAGENTA         "\033[35m"
+#define SGR_CYAN            "\033[36m"
+#define SGR_WHITE           "\033[37m"
+#define SGR_RGB(_r, _g, _b) "\033[38;2;" #_r ";" #_g ";" #_b "m"
+#define SGR_DEFAULT         "\033[39m"
+#define SGR_BBLACK          "\033[90m"
+#define SGR_BRED            "\033[91m"
+#define SGR_BGREEN          "\033[92m"
+#define SGR_BYELLOW         "\033[93m"
+#define SGR_BBLUE           "\033[94m"
+#define SGR_BMAGENTA        "\033[95m"
+#define SGR_BCYAN           "\033[96m"
+#define SGR_BWHITE          "\033[97m"
 
 
 
@@ -44,6 +68,56 @@ int sendArpRequest(const char* addrStr, const char* ifname, const struct sockadd
 
 
 namespace util {
+
+
+#define ARPDATA_HLEN (6) // hardware address length
+#define ARPDATA_PLEN (4) // protocol address length
+
+    /**
+     * @brief IPv4 ARP data container.
+     *
+     * - hardware address: MAC/EUI48
+     * - protocol address: IPv4 address
+     */
+    struct arpdata
+    {
+        uint8_t ar_sha[ARPDATA_HLEN]; // sender hardware address
+        uint8_t ar_spa[ARPDATA_PLEN]; // sender protocol address
+        uint8_t ar_tha[ARPDATA_HLEN]; // target hardware address
+        uint8_t ar_tpa[ARPDATA_PLEN]; // target protocol address
+    } __attribute__((packed));
+
+
+
+    struct ippseudohdr
+    {
+        struct sockaddr_storage saddr;
+        struct sockaddr_storage daddr;
+        uint32_t length; // number of TCP/UDP packet octets = TCP/UDP header size + TCP/UDP payload size
+                         //                                 = IP packet size - IP header size (=IHL*4)
+        uint8_t protocol;
+    };
+
+    /**
+     * @param [out] dst
+     * @param iphdr
+     * @return `dst`
+     */
+    struct ippseudohdr* ippseudohdr_init(struct ippseudohdr* dst, const struct iphdr* iphdr);
+
+    uint16_t inet_checksum(const uint8_t* data, size_t count);
+
+    static inline void inet_checksum_init(uint32_t* sum) { *sum = 0; }
+
+    void inet_checksum_update(uint32_t* sum, const uint8_t* data, size_t count);
+
+    static inline void inet_checksum_update16h(uint32_t* sum, uint16_t value) { *sum += value; }
+    static inline void inet_checksum_update16n(uint32_t* sum, uint16_t value) { *sum += ntohs(value); }
+    static inline void inet_checksum_update32h(uint32_t* sum, uint32_t value) { *sum += (value >> 16) + (value & 0x0000FFFF); }
+    static inline void inet_checksum_update32n(uint32_t* sum, uint32_t value) { inet_checksum_update32h(sum, ntohl(value)); }
+
+    void inet_checksum_update_ippseudohdr(uint32_t* sum, const struct ippseudohdr* pseudoHdr);
+    uint16_t inet_checksum_final(uint32_t* sum);
 
     /**
      * @brief Address family to string.

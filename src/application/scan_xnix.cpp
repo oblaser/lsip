@@ -94,6 +94,7 @@ public:
 
     // clang-format off
     int error() const { lock_guard lg(m_mtx); return m_error; }
+    std::vector<Resolution> getResolutions() const { lock_guard lg(m_mtx); return m_res; }
     // clang-format on
 
     Resolution popResolution(const struct in_addr* ip);
@@ -169,7 +170,7 @@ int impl_scan_xnix(const char* addrStr, uint8_t* macBuffer)
     if (err == 1)
     {
         isArp = false;
-        err = sock::sendEchoRequest();
+        err = sock::sendEchoRequest(&taddr);
         if (err) { return (err * 1000000) + -(__LINE__); }
     }
     else if (err == 0)
@@ -178,7 +179,7 @@ int impl_scan_xnix(const char* addrStr, uint8_t* macBuffer)
         err = sock::sendArpRequest(addrStr, ifname, &ifaddr, &taddr);
         if (err) { return (err * 1000000) + -(__LINE__); }
     }
-    else { return -(__LINE__); }
+    else { return ((err * 1000000) - (__LINE__)); }
 
 
 

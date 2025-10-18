@@ -8,6 +8,7 @@ copyright       GPL-3.0 - Copyright (c) 2025 Oliver Blaser
 #include <string>
 
 #include "middleware/cli.h"
+#include "project.h"
 #include "util.h"
 
 #include <omw/defs.h>
@@ -61,8 +62,6 @@ int sock::getifaddr(char* ifname, size_t ifnameSize, struct sockaddr* ifaddr, in
         return -(__LINE__);
     }
 
-    taddr->s_addr = ntohl(taddr->s_addr);
-
     if (getifaddrs(&iflist) != 0)
     {
         cli::printErrno("failed to get network interfaces", errno);
@@ -77,10 +76,22 @@ int sock::getifaddr(char* ifname, size_t ifnameSize, struct sockaddr* ifaddr, in
         {
             if (af == AF_INET)
             {
-                const struct sockaddr_in* const sa_addr = ((const struct sockaddr_in*)ifa->ifa_addr);
-                const struct sockaddr_in* const sa_mask = ((const struct sockaddr_in*)ifa->ifa_netmask);
+                const struct sockaddr_in* const sa_addr = (const struct sockaddr_in*)(ifa->ifa_addr);
+                const struct sockaddr_in* const sa_mask = (const struct sockaddr_in*)(ifa->ifa_netmask);
 
-                if ((((sa_addr->sin_addr.s_addr) ^ (taddr->s_addr)) & (sa_mask->sin_addr.s_addr)) == 0)
+                const uint32_t if_xor_t = ((sa_addr->sin_addr.s_addr) ^ (taddr->s_addr));
+                const uint32_t xor_and_mask = (if_xor_t & (sa_mask->sin_addr.s_addr));
+
+#if PRJ_DEBUG && 0
+                printf("if addr: %08x %s\n", (sa_addr->sin_addr.s_addr), sock::util::inaddrtos(&(sa_addr->sin_addr)).c_str());
+                printf("t  addr: %08x %s\n", (taddr->s_addr), sock::util::inaddrtos(taddr).c_str());
+                printf("XOR      %08x %s\n", if_xor_t, sock::util::inaddrtos(if_xor_t).c_str());
+                printf("if mask: %08x %s\n", (sa_mask->sin_addr.s_addr), sock::util::inaddrtos(&(sa_mask->sin_addr)).c_str());
+                printf("AND      %08x %s\n", xor_and_mask, sock::util::inaddrtos(xor_and_mask).c_str());
+                printf("\n");
+#endif
+
+                if (xor_and_mask == 0) // `taddr` is in the same subnet as the interface
                 {
                     strncpy(ifname, ifa->ifa_name, ifnameSize);
                     *(ifname + ifnameSize - 1) = 0;
@@ -105,10 +116,10 @@ int sock::getifaddr(char* ifname, size_t ifnameSize, struct sockaddr* ifaddr, in
             if (cnt++) { printf("\n"); }
 
             printf("%s\n", ifa->ifa_name);
-            if (ifa->ifa_addr) { printf("    addr  %s\n", sockaddrtos(ifa->ifa_addr).c_str()); }
-            if (ifa->ifa_netmask) { printf("    mask  %s\n", sockaddrtos(ifa->ifa_netmask).c_str()); }
-            if (ifa->ifa_flags & IFF_BROADCAST) { printf("    broad %s\n", sockaddrtos(ifa->ifa_broadaddr).c_str()); }
-            if (ifa->ifa_flags & IFF_POINTOPOINT) { printf("    dst   %s\n", sockaddrtos(ifa->ifa_dstaddr).c_str()); }
+            if (ifa->ifa_addr) { printf("    addr  %s\n", sock::util::sockaddrtos(ifa->ifa_addr).c_str()); }
+            if (ifa->ifa_netmask) { printf("    mask  %s\n", sock::util::sockaddrtos(ifa->ifa_netmask).c_str()); }
+            if (ifa->ifa_flags & IFF_BROADCAST) { printf("    broad %s\n", sock::util::sockaddrtos(ifa->ifa_broadaddr).c_str()); }
+            if (ifa->ifa_flags & IFF_POINTOPOINT) { printf("    dst   %s\n", sock::util::sockaddrtos(ifa->ifa_dstaddr).c_str()); }
             // for `ifa->ifa_data` see https://man7.org/linux/man-pages/man3/getifaddrs.3.html
         }
 #endif // PRJ_DEBUG
@@ -235,14 +246,24 @@ int sock::sendArpRequest(const char* addrStr, const char* ifname, const struct s
 
 
 
+#if PRJ_DEBUG && 01
+    printf("sent ARP to %s\n", sock::util::inaddrtos(taddr).c_str());
+#endif
+
+
+
     close(sockfd);
 
     return 0;
 }
 
-int sock::sendEchoRequest()
+int sock::sendEchoRequest(const struct in_addr* taddr)
 {
-    // TODO implement
+    cli::printError("TODO implement " + std::string(__func__));
+
+#if PRJ_DEBUG && 01
+    printf("sent Echo to %s\n", sock::util::inaddrtos(taddr).c_str());
+#endif
 
     return 0;
 }
@@ -503,6 +524,27 @@ std::string sock::util::sockaddrtos(const struct sockaddr* sa)
     }
 
     return str;
+}
+
+std::string sock::util::inaddrtos(const struct in_addr* addr)
+{
+    std::string str;
+    char buffer[INET_ADDRSTRLEN];
+
+    const char* const dst = inet_ntop(AF_INET, addr, buffer, sizeof(buffer));
+
+    if (dst) { str = dst; }
+
+    return str;
+}
+
+std::string sock::util::inaddrtos(in_addr_t addr)
+{
+    const struct in_addr tmp = {
+        .s_addr = addr,
+    };
+
+    return sock::util::inaddrtos(&tmp);
 }
 
 

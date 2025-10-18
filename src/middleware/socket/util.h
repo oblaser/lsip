@@ -69,7 +69,7 @@ int getifaddr(char* ifname, size_t ifnameSize, struct sockaddr* ifaddr, int af, 
 
 int sendArpRequest(const char* addrStr, const char* ifname, const struct sockaddr* ifaddr, const struct in_addr* taddr);
 
-int sendEchoRequest();
+int sendEchoRequest(const struct in_addr* taddr);
 
 
 namespace util {
@@ -156,6 +156,9 @@ namespace util {
     std::string sockaddrtos(const struct sockaddr* sa);
     static inline std::string sockaddrtos(const struct sockaddr_in* sa) { return sockaddrtos((const struct sockaddr*)sa); }
     static inline std::string sockaddrtos(const struct sockaddr_in6* sa) { return sockaddrtos((const struct sockaddr*)sa); }
+
+    std::string inaddrtos(const struct in_addr* addr);
+    std::string inaddrtos(in_addr_t addr);
 
 } // namespace util
 } // namespace sock

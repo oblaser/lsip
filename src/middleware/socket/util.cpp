@@ -22,6 +22,9 @@ copyright       GPL-3.0 - Copyright (c) 2025 Oliver Blaser
 
 #include <arpa/inet.h>
 
+#include <ifaddrs.h>
+#include <linux/if_packet.h>
+
 #include <net/ethernet.h>
 #include <net/if.h>
 #include <net/if_arp.h>
@@ -33,8 +36,6 @@ copyright       GPL-3.0 - Copyright (c) 2025 Oliver Blaser
 #include <sys/socket.h>
 #include <sys/types.h>
 
-#include <ifaddrs.h>
-#include <linux/if_packet.h>
 #include <unistd.h>
 
 
@@ -246,7 +247,7 @@ int sock::sendArpRequest(const char* addrStr, const char* ifname, const struct s
 
 
 
-#if PRJ_DEBUG && 01
+#if PRJ_DEBUG && 0
     printf("sent ARP to %s\n", sock::util::inaddrtos(taddr).c_str());
 #endif
 

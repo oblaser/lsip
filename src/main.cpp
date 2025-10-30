@@ -12,6 +12,7 @@ copyright       GPL-3.0 - Copyright (c) 2025 Oliver Blaser
 
 #include "application/process.h"
 #include "application/vendor-cache.h"
+#include "middleware/interfaces.h"
 #include "project.h"
 
 #include <curl-thread/curl.h>
@@ -76,7 +77,7 @@ enum EXITCODE // https://tldp.org/LDP/abs/html/exitcodes.html / on MSW are no pr
 };
 static_assert(EC__end_ <= EC__max_, "too many error codes defined");
 
-const std::string usageString = std::string(prj::exeName) + " [options] ADDR [ADDR [ADDR [...]]]";
+const std::string usageString = std::string(prj::exeName) + " [options] [ADDR [ADDR [...]]]";
 
 void printHelp()
 {
@@ -224,13 +225,27 @@ int main(int argc, char** argv)
 
             if (!err)
             {
+                bool processedArgIpRange = false;
+
                 for (size_t i = 0; i < args.size(); ++i)
                 {
                     const auto& arg = args[i];
 
                     if (!argstr::isOption(arg))
                     {
+                        processedArgIpRange = true;
                         const int err = app::process(arg);
+                        if (err) { r = EC_ERROR; }
+                    }
+                }
+
+                if (!processedArgIpRange)
+                {
+                    const auto ranges = getIfIpRanges();
+
+                    for (size_t i = 0; i < ranges.size(); ++i)
+                    {
+                        const int err = app::process(ranges[i]);
                         if (err) { r = EC_ERROR; }
                     }
                 }
@@ -249,26 +264,6 @@ int main(int argc, char** argv)
             app::cache::save();
         }
     }
-    // else
-    //{
-    //     r = EC_ERROR;
-    //
-    //    if (args.count() == 0)
-    //    {
-    //        cout << "No arguments." << endl;
-    //        printUsageAndTryHelp();
-    //    }
-    //    else if (!args.options().isValid())
-    //    {
-    //        cout << prj::exeName << ": unrecognized option: '" << args.options().unrecognized() << "'" << endl;
-    //        printUsageAndTryHelp();
-    //    }
-    //    else
-    //    {
-    //        cout << "Error" << endl;
-    //        printUsageAndTryHelp();
-    //    }
-    //}
 
 
 
@@ -292,22 +287,17 @@ int main(int argc, char** argv)
 
 bool argstr::check(const std::vector<std::string>& args)
 {
-    bool ok = false;
+    bool ok = true;
 
-    if (!args.empty())
+    for (size_t i = 0; i < args.size(); ++i)
     {
-        ok = true;
+        const auto& arg = args[i];
 
-        for (size_t i = 0; ok && (i < args.size()); ++i)
+        if (!argstr::isKnownOption(arg) && argstr::isOption(arg))
         {
-            const auto& arg = args[i];
-
-            if (!argstr::isKnownOption(arg) && argstr::isOption(arg))
-            {
-                ok = false;
-
-                cout << "unknown option: " << arg << endl;
-            }
+            ok = false;
+            cout << "unknown option: " << arg << endl;
+            break;
         }
     }
 

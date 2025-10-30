@@ -144,7 +144,7 @@ void xnix_deinit()
     sniffer::sd.shutdown();
     thread_sniffer.join();
 
-#if PRJ_DEBUG && 01
+#if PRJ_DEBUG && 0
     const auto res = sniffer::sd.getResolutions();
     printf("\nunpopped resolutions:\n");
     for (size_t i = 0; i < res.size(); ++i) { printf("%3zu   %s\n", i, res[i].toString().c_str()); }
@@ -252,7 +252,7 @@ Resolution SharedData::popResolution(const struct in_addr* ip)
             res = m_res[i];
             m_res.erase(m_res.begin() + i);
 
-#if PRJ_DEBUG && 01
+#if PRJ_DEBUG && 0
             char buffer[100];
             const uint32_t net_saddr = htonl(res.ip.s_addr);
             printf("popped (%zu) %15s %s\n", m_res.size(), inet_ntop(AF_INET, &net_saddr, buffer, sizeof(buffer)), res.mac.toString().c_str());
@@ -277,7 +277,7 @@ void SharedData::pushResolution(const Resolution& res)
         {
             m_res[i] = res;
 
-#if PRJ_DEBUG && 1
+#if PRJ_DEBUG && 0
 #define ___pushResolution_printEntry (1)
             char buffer[100];
             printf(SGR_BBLACK "repl res   #%zu: %15s %s" SGR_DEFAULT "\n", i, inet_ntop(AF_INET, &(res.ip.s_addr), buffer, sizeof(buffer)),
@@ -317,7 +317,7 @@ static void handlePacket_arp(const uint8_t* data, size_t size)
 
 
 
-#if PRJ_DEBUG && 01
+#if PRJ_DEBUG && 0
 
     if (arpOperation != ARPOP_REQUEST)
     {

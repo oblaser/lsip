@@ -12,7 +12,7 @@ copyright       GPL-3.0 - Copyright (c) 2025 Oliver Blaser
 #include <string>
 
 
-namespace ip {
+namespace mwip {
 
 /**
  * @brief Interface class.
@@ -135,7 +135,7 @@ public:
         : Addr4(0xFFFFFFFF)
     {}
 
-    SubnetMask4(const ip::Addr4& mask) noexcept(false)
+    SubnetMask4(const mwip::Addr4& mask) noexcept(false)
         : Addr4(mask)
     {
         this->check();
@@ -211,7 +211,7 @@ private:
 
 
 
-static inline std::string cidrString(const ip::Address& addr, const ip::SubnetMask& subnetMask)
+static inline std::string cidrString(const mwip::Address& addr, const mwip::SubnetMask& subnetMask)
 {
     return (addr.toString() + '/' + std::to_string(subnetMask.prefixSize()));
 }
@@ -221,17 +221,17 @@ static inline std::string cidrString(const ip::Address& addr, const ip::SubnetMa
 //! \name Operators
 /// @{
 
-static inline bool operator==(const ip::Addr4& a, const ip::Addr4& b) { return (a.value() == b.value()); }
-static inline bool operator!=(const ip::Addr4& a, const ip::Addr4& b) { return !(a == b); }
-static inline bool operator<(const ip::Addr4& a, const ip::Addr4& b) { return (a.value() < b.value()); }
-static inline bool operator>(const ip::Addr4& a, const ip::Addr4& b) { return (b < a); }
-static inline bool operator<=(const ip::Addr4& a, const ip::Addr4& b) { return !(a > b); }
-static inline bool operator>=(const ip::Addr4& a, const ip::Addr4& b) { return !(a < b); }
+static inline bool operator==(const mwip::Addr4& a, const mwip::Addr4& b) { return (a.value() == b.value()); }
+static inline bool operator!=(const mwip::Addr4& a, const mwip::Addr4& b) { return !(a == b); }
+static inline bool operator<(const mwip::Addr4& a, const mwip::Addr4& b) { return (a.value() < b.value()); }
+static inline bool operator>(const mwip::Addr4& a, const mwip::Addr4& b) { return (b < a); }
+static inline bool operator<=(const mwip::Addr4& a, const mwip::Addr4& b) { return !(a > b); }
+static inline bool operator>=(const mwip::Addr4& a, const mwip::Addr4& b) { return !(a < b); }
 
-static inline ip::Addr4 operator~(const ip::Addr4& a) { return ip::Addr4(~a.value()); }
-static inline ip::Addr4 operator&(const ip::Addr4& a, const ip::Addr4& b) { return ip::Addr4(a.value() & b.value()); }
-static inline ip::Addr4 operator|(const ip::Addr4& a, const ip::Addr4& b) { return ip::Addr4(a.value() | b.value()); }
-static inline ip::Addr4 operator^(const ip::Addr4& a, const ip::Addr4& b) { return ip::Addr4(a.value() ^ b.value()); }
+static inline mwip::Addr4 operator~(const mwip::Addr4& a) { return mwip::Addr4(~a.value()); }
+static inline mwip::Addr4 operator&(const mwip::Addr4& a, const mwip::Addr4& b) { return mwip::Addr4(a.value() & b.value()); }
+static inline mwip::Addr4 operator|(const mwip::Addr4& a, const mwip::Addr4& b) { return mwip::Addr4(a.value() | b.value()); }
+static inline mwip::Addr4 operator^(const mwip::Addr4& a, const mwip::Addr4& b) { return mwip::Addr4(a.value() ^ b.value()); }
 
 // subnet mask operator overloads do not make sense, they are most likely going to throw because
 
@@ -239,7 +239,14 @@ static inline ip::Addr4 operator^(const ip::Addr4& a, const ip::Addr4& b) { retu
 
 
 
-} // namespace ip
+} // namespace mwip
+
+
+
+#ifndef MWIP_DONT_DEF_NAMESPACE_IP
+namespace ip = mwip;
+#endif
+
 
 
 #endif // IG_MIDDLEWARE_IPADDR_H

@@ -50,6 +50,7 @@ set(SOURCES
     ../../src/application/vendor-lookup.cpp
     ../../src/middleware/socket/util.cpp
     ../../src/middleware/cli.cpp
+    ../../src/middleware/interfaces.cpp
     ../../src/middleware/ip-addr.cpp
     ../../src/middleware/mac-addr.cpp
     ../../src/main.cpp

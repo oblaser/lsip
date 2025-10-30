@@ -10,7 +10,6 @@ copyright       GPL-3.0 - Copyright (c) 2025 Oliver Blaser
 #include <stdexcept>
 #include <string>
 
-
 #include "ip-addr.h"
 
 #include <omw/defs.h>

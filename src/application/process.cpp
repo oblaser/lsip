@@ -41,9 +41,9 @@ class Queue
 {
 public:
 #if PRJ_DEBUG
-    static constexpr size_t maxThCount = 10;
+    static constexpr size_t maxThCount = 51;
 #else
-    static constexpr size_t maxThCount = 20;
+    static constexpr size_t maxThCount = 51;
 #endif
 
     using lock_guard = std::lock_guard<std::mutex>;
@@ -158,7 +158,7 @@ int app::process(const std::string& argAddrRange)
         }
 
         uint16_t threadSleep = 10;
-        auto res = queue.popRes();
+        const auto res = queue.popRes();
         if (!res.empty())
         {
             printResult(res);
@@ -220,7 +220,7 @@ void printResult(const app::ScanResult& result)
     ss << " " << std::left << std::setw(15) << result.ip().toString();
 
     if (result.mac().isCID()) { ss << omw::fgYellow; }
-    ss << "  " << std::left << std::setw(17) << result.mac().toString();
+    ss << "  " << std::left << std::setw(17) << (result.mac() == mac::EUI48::null ? "" : result.mac().toString());
     ss << omw::fgDefault;
 
     ss << "  " << std::right << std::setw(4) << result.duration() << "ms";
@@ -230,15 +230,20 @@ void printResult(const app::ScanResult& result)
     {
         ss << "  ";
 
-        if (true /* TODO cli option */) { ss << omw::fgBrightBlack << '[' << vendor.source() << ']' << omw::fgDefault; }
-
-        if (vendor.hasColour())
+        if (/* TODO cli option */
+#if PRJ_DEBUG && 0
+            true
+#else
+            false
+#endif
+        )
         {
-            const auto& col = vendor.colour();
-            ss << omw::foreColor(col);
+            ss << omw::fgBrightBlack << '[' << vendor.source() << ']' << omw::fgDefault << ' ';
         }
 
-        ss << ' ' << vendor.name();
+        if (vendor.hasColour()) { ss << omw::foreColor(vendor.colour()); }
+
+        ss << vendor.name();
         ss << omw::fgDefault;
     }
 

@@ -419,7 +419,7 @@ static void handlePacket_icmp(const struct in_addr* saddr, const uint8_t* data, 
 
     printf("ICMP from %s\n", sock::util::inaddrtos(saddr).c_str());
     printf("  type      %i %s\n", (int)icmpType, sock::util::icmpttos(icmpType).c_str());
-    printf("  code      %i\n", (int)icmpCode);
+    printf("  code      %i %s\n", (int)icmpCode, sock::util::icmpctos(icmpType, icmpCode).c_str());
     printf("  check     %s0x%04x" SGR_ICMP "\n", ((icmpCheckCalc == 0) ? "" : SGR_RED), (int)icmpCheck);
     printf("  hdr size  %zu\n", icmpHeaderSize);
     printf("  data size %zu + %zu pad\n", icmpDataSize, padDataSize);

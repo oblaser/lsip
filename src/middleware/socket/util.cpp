@@ -45,6 +45,11 @@ copyright       GPL-3.0 - Copyright (c) 2025 Oliver Blaser
         str = #_define;                    \
         break
 
+#define SWITCH_CASE_DEFINE_TO_SUBSTR(_define, _pos) \
+    case _define:                                   \
+        str = (#_define) + (_pos);                  \
+        break
+
 
 
 int sock::getifaddr(char* ifname, size_t ifnameSize, struct sockaddr* ifaddr, int af, const char* taddrStr, struct in_addr* taddr)
@@ -260,11 +265,63 @@ int sock::sendArpRequest(const char* addrStr, const char* ifname, const struct s
 
 int sock::sendEchoRequest(const struct in_addr* taddr)
 {
-    cli::printError("TODO implement " + std::string(__func__));
+    const int sockfd = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP);
+    if (sockfd < 0)
+    {
+        cli::printErrno("failed to create socket", errno);
+        return -(__LINE__);
+    }
 
-#if PRJ_DEBUG && 01
+
+
+    // serialise ICMP packet
+
+    constexpr size_t bufferSize = sizeof(struct icmphdr);
+    uint8_t buffer[bufferSize];
+    memset(buffer, 0, bufferSize);
+
+    struct icmphdr* icmpHeader = (struct icmphdr*)(buffer + 0);
+    icmpHeader->type = ICMP_ECHO;
+    icmpHeader->code = 0;
+
+    // optional data ...
+
+    icmpHeader->checksum = htons(sock::util::inet_checksum(buffer, bufferSize));
+
+
+
+    // send ICMP packet
+
+    ssize_t n, transferred;
+    const struct sockaddr_in dst_addr = {
+        .sin_family = AF_INET,
+        .sin_port = 0,
+        .sin_addr = *taddr,
+    };
+
+    transferred = 0;
+    while ((size_t)transferred < bufferSize)
+    {
+        n = sendto(sockfd, buffer, bufferSize, 0, (struct sockaddr*)(&dst_addr), sizeof(dst_addr));
+        if (n < 0)
+        {
+            cli::printErrno("failed to send ICMP packet for target " + sock::util::inaddrtos(taddr), errno);
+            close(sockfd);
+            return -(__LINE__);
+        }
+
+        transferred += n;
+    }
+
+
+
+#if PRJ_DEBUG && 0
     printf("sent Echo to %s\n", sock::util::inaddrtos(taddr).c_str());
 #endif
+
+
+
+    close(sockfd);
 
     return 0;
 }
@@ -463,15 +520,119 @@ std::string sock::util::icmpttos(uint8_t type)
         SWITCH_CASE_DEFINE_TO_STR(ICMP_INFO_REPLY);
         SWITCH_CASE_DEFINE_TO_STR(ICMP_ADDRESS);
         SWITCH_CASE_DEFINE_TO_STR(ICMP_ADDRESSREPLY);
+        SWITCH_CASE_DEFINE_TO_STR(ICMP_EXT_ECHO);
+        SWITCH_CASE_DEFINE_TO_STR(ICMP_EXT_ECHOREPLY);
 
     default:
     {
-        static_assert(ICMP_TYPE_STRLEN >= 11, "increase ICMP_TYPE_STRLEN");
-
-        str = "ICMP_#" + omw::toHexStr(type) + 'h';
+        static_assert(ICMP_TYPE_STRLEN >= 12, "increase ICMP_TYPE_STRLEN");
+        str = "ICMP_T#" + omw::toHexStr(type) + 'h';
     }
     break;
     }
+
+    return str;
+}
+
+std::string sock::util::icmpctos(uint8_t type, uint8_t code)
+{
+    std::string str;
+
+#define SWITCH_CASE_ICMPCTOS_DEFAULT()                                      \
+    default:                                                                \
+        static_assert(ICMP_CODE_STRLEN >= 12, "increase ICMP_CODE_STRLEN"); \
+        str = "ICMP_C#" + omw::toHexStr(type) + 'h';                        \
+        break
+
+
+
+    switch (type)
+    {
+    case ICMP_ECHOREPLY:
+    case ICMP_SOURCE_QUENCH:
+    case ICMP_ECHO:
+    case 9:
+    case 10:
+    case ICMP_PARAMETERPROB:
+    case ICMP_TIMESTAMP:
+    case ICMP_TIMESTAMPREPLY:
+    case ICMP_INFO_REQUEST:
+    case ICMP_INFO_REPLY:
+    case ICMP_ADDRESS:
+    case ICMP_ADDRESSREPLY:
+    case 30:
+    case ICMP_EXT_ECHO:
+        // these don't use codes
+        str = "";
+        break;
+
+    case ICMP_DEST_UNREACH:
+        switch (code)
+        {
+            SWITCH_CASE_DEFINE_TO_SUBSTR(ICMP_NET_UNREACH, 5);
+            SWITCH_CASE_DEFINE_TO_SUBSTR(ICMP_HOST_UNREACH, 5);
+            SWITCH_CASE_DEFINE_TO_SUBSTR(ICMP_PROT_UNREACH, 5);
+            SWITCH_CASE_DEFINE_TO_SUBSTR(ICMP_PORT_UNREACH, 5);
+            SWITCH_CASE_DEFINE_TO_SUBSTR(ICMP_FRAG_NEEDED, 5);
+            SWITCH_CASE_DEFINE_TO_SUBSTR(ICMP_SR_FAILED, 5);
+            SWITCH_CASE_DEFINE_TO_SUBSTR(ICMP_NET_UNKNOWN, 5);
+            SWITCH_CASE_DEFINE_TO_SUBSTR(ICMP_HOST_UNKNOWN, 5);
+            SWITCH_CASE_DEFINE_TO_SUBSTR(ICMP_HOST_ISOLATED, 5);
+            SWITCH_CASE_DEFINE_TO_SUBSTR(ICMP_NET_ANO, 5);
+            SWITCH_CASE_DEFINE_TO_SUBSTR(ICMP_HOST_ANO, 5);
+            SWITCH_CASE_DEFINE_TO_SUBSTR(ICMP_NET_UNR_TOS, 5);
+            SWITCH_CASE_DEFINE_TO_SUBSTR(ICMP_HOST_UNR_TOS, 5);
+            SWITCH_CASE_DEFINE_TO_SUBSTR(ICMP_PKT_FILTERED, 5);
+            SWITCH_CASE_DEFINE_TO_SUBSTR(ICMP_PREC_VIOLATION, 5);
+            SWITCH_CASE_DEFINE_TO_SUBSTR(ICMP_PREC_CUTOFF, 5);
+
+            SWITCH_CASE_ICMPCTOS_DEFAULT();
+        }
+        break;
+
+    case ICMP_REDIRECT:
+        switch (code)
+        {
+            SWITCH_CASE_DEFINE_TO_SUBSTR(ICMP_REDIR_NET, 5);
+            SWITCH_CASE_DEFINE_TO_SUBSTR(ICMP_REDIR_HOST, 5);
+            SWITCH_CASE_DEFINE_TO_SUBSTR(ICMP_REDIR_NETTOS, 5);
+            SWITCH_CASE_DEFINE_TO_SUBSTR(ICMP_REDIR_HOSTTOS, 5);
+
+            SWITCH_CASE_ICMPCTOS_DEFAULT();
+        }
+        break;
+
+    case ICMP_TIME_EXCEEDED:
+        switch (code)
+        {
+            SWITCH_CASE_DEFINE_TO_SUBSTR(ICMP_EXC_TTL, 5);
+            SWITCH_CASE_DEFINE_TO_SUBSTR(ICMP_EXC_FRAGTIME, 5);
+
+            SWITCH_CASE_ICMPCTOS_DEFAULT();
+        }
+        break;
+
+    case ICMP_EXT_ECHOREPLY:
+        switch (code)
+        {
+        case 0:
+            str = "no error";
+            break;
+
+            SWITCH_CASE_DEFINE_TO_SUBSTR(ICMP_EXT_CODE_MAL_QUERY, 14);
+            SWITCH_CASE_DEFINE_TO_SUBSTR(ICMP_EXT_CODE_NO_IF, 14);
+            SWITCH_CASE_DEFINE_TO_SUBSTR(ICMP_EXT_CODE_NO_TABLE_ENT, 14);
+            SWITCH_CASE_DEFINE_TO_SUBSTR(ICMP_EXT_CODE_MULT_IFS, 14);
+
+            SWITCH_CASE_ICMPCTOS_DEFAULT();
+        }
+        break;
+
+
+        SWITCH_CASE_ICMPCTOS_DEFAULT();
+    }
+
+#undef SWITCH_CASE_ICMPCTOS_DEFAULT
 
     return str;
 }

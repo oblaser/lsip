@@ -26,6 +26,7 @@ copyright       GPL-3.0 - Copyright (c) 2025 Oliver Blaser
 #define ETH_P_STRLEN     17
 #define IPPROTO_STRLEN   17
 #define ICMP_TYPE_STRLEN 15
+#define ICMP_CODE_STRLEN 15
 #define SOCKADDRSTRLEN   54
 
 #define SGR_BLACK           "\033[30m"
@@ -152,6 +153,11 @@ namespace util {
      * @brief ICMP type to string.
      */
     std::string icmpttos(uint8_t type);
+
+    /**
+     * @brief ICMP code to string.
+     */
+    std::string icmpctos(uint8_t type, uint8_t code);
 
     /**
      * Converts a `sockaddr` to it's string representation, according to it's family.

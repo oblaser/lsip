@@ -48,8 +48,9 @@ copyright       GPL-3.0 - Copyright (c) 2025 Oliver Blaser
 #define SGR_BCYAN           "\033[96m"
 #define SGR_BWHITE          "\033[97m"
 
-#define SGR_ARP  SGR_RGB(244, 221, 153)
-#define SGR_ICMP SGR_RGB(163, 255, 153)
+#define SGR_ARP      SGR_RGB(244, 221, 153)
+#define SGR_ICMP     SGR_RGB(163, 255, 153)
+#define SGR_ICMP_ERR SGR_RGB(237, 126, 237)
 
 
 

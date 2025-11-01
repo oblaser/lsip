@@ -234,7 +234,7 @@ app::ScanResult impl_scan(const ip::Addr4& addr)
     else
     {
         if (err < 0) { cli::printError("failed to scan " + addr.toString() + " (" + std::to_string(err) + ")"); }
-        // else nop, timeout
+        // else nop, timeout or unreachable
     }
 
     return r;

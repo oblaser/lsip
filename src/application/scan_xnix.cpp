@@ -58,28 +58,36 @@ namespace sniffer {
 class Resolution
 {
 public:
+    enum class Type
+    {
+        null,
+        unreach, // special value so that the scanner does not need to wait for it's full timeout duration
+        ARP,
+        ECHO,
+    };
+
+public:
     Resolution()
-        : mac(), ip{ .s_addr = 0 }
+        : type(Type::null), mac(mac::EUI48::null), ip{ .s_addr = 0 }
     {}
 
     Resolution(const mac::EUI48& _mac, const struct in_addr* _ip)
-        : mac(_mac), ip{ .s_addr = 0 }
+        : type(Type::ARP), mac(_mac), ip{ .s_addr = 0 }
     {
         if (_ip) { this->ip.s_addr = _ip->s_addr; }
     }
 
-    Resolution(const uint8_t* _macData, const struct in_addr* _ip)
-        : mac(_macData), ip{ .s_addr = 0 }
+    Resolution(const Type& _type, const struct in_addr* _ip)
+        : type(_type), mac(mac::EUI48::null), ip{ .s_addr = 0 }
     {
         if (_ip) { this->ip.s_addr = _ip->s_addr; }
     }
 
     virtual ~Resolution() {}
 
-    bool isNull() const { return ((this->mac == mac::EUI48::null) && (this->ip.s_addr == 0)); }
-
     std::string toString() const;
 
+    Type type;
     mac::EUI48 mac;
     struct in_addr ip;
 };
@@ -154,7 +162,7 @@ void xnix_deinit()
 /**
  * @param addrStr IPv4 address, format: `a.b.c.d`
  * @param [out] macBuffer MAC address buffer
- * @return 0 on success, negative on error, positive on timeout
+ * @return 0 on success, negative on error, 1 on timeout, 2 if not reachable
  */
 int impl_scan_xnix(const char* addrStr, uint8_t* macBuffer)
 {
@@ -192,30 +200,52 @@ int impl_scan_xnix(const char* addrStr, uint8_t* macBuffer)
 
 
     int r = -(__LINE__);
+    bool done = false;
     const omw::clock::timepoint_t tpStart = omw::clock::now();
-    while (1)
+    while (!done)
     {
         // timeout
         if (omw::clock::elapsed_ms(omw::clock::now(), tpStart, (isArp ? timeout_arp_s : timeout_icmp_s) * omw::clock::second_ms))
         {
+#if PRJ_DEBUG && 0
+            printf(SGR_BBLACK "%s timeout" SGR_DEFAULT "\n", addrStr);
+#endif
             r = 1;
-            break;
+            done = true;
         }
 
         const sniffer::Resolution res = sniffer::sd.popResolution(&taddr);
-        if (!res.isNull())
-        {
-            for (size_t i = 0; i < res.mac.size(); ++i) { macBuffer[i] = res.mac[i]; }
 
+        switch (res.type)
+        {
+        case sniffer::Resolution::Type::null:
+            // nop, no resolution for the requested IP adderss available
+            break;
+
+        case sniffer::Resolution::Type::ARP:
+        case sniffer::Resolution::Type::ECHO:
+            for (size_t i = 0; i < res.mac.size(); ++i) { macBuffer[i] = res.mac[i]; }
             r = 0;
+            done = true;
+            break;
+
+        case sniffer::Resolution::Type::unreach:
+#if PRJ_DEBUG && 0
+            printf(SGR_BBLACK "%s unreachable" SGR_DEFAULT "\n", addrStr);
+#endif
+            r = 2;
+            done = true;
             break;
         }
 
-        const struct timespec ts = {
-            .tv_sec = 0,
-            .tv_nsec = 500 * 1000,
-        };
-        nanosleep(&ts, NULL);
+        if (!done)
+        {
+            const struct timespec ts = {
+                .tv_sec = 0,
+                .tv_nsec = 500 * 1000,
+            };
+            nanosleep(&ts, NULL);
+        }
     }
 
     return r;
@@ -385,7 +415,7 @@ static void handlePacket_arp(const uint8_t* data, size_t size)
             .s_addr = htonl(addr_he),
         };
 
-        sd.pushResolution(Resolution(sMacData, &sIpAddr));
+        sd.pushResolution(Resolution(mac::EUI48(sMacData), &sIpAddr));
     }
 }
 
@@ -396,43 +426,77 @@ static void handlePacket_icmp(const struct in_addr* saddr, const uint8_t* data, 
     const uint8_t icmpType = icmpHeader->type;
     // const uint8_t icmpCode = icmpHeader->code;
     // const uint16_t icmpCheck = ntohs(icmpHeader->checksum);
-    // const uint8_t* const icmpData = data + icmpHeaderSize;
+    const uint8_t* const icmpData = data + icmpHeaderSize;
     const size_t icmpDataSize = size - icmpHeaderSize;
     // const uint8_t* const padData = data + icmpHeaderSize + icmpDataSize; // potential padding
     // const size_t padDataSize = size - icmpHeaderSize - icmpDataSize;     // potential padding
 
-    const uint16_t icmpCheckCalc = sock::util::inet_checksum(data, icmpHeaderSize + icmpDataSize);
-    const bool checksumOk = (icmpCheckCalc == 0);
+    // const uint16_t icmpCheckCalc = sock::util::inet_checksum(data, icmpHeaderSize + icmpDataSize);
+    // const bool checksumOk = (icmpCheckCalc == 0);
 
 
 
-#if PRJ_DEBUG && 01
+#if PRJ_DEBUG && 0
 
     const uint8_t icmpCode = icmpHeader->code;
     const uint16_t icmpCheck = ntohs(icmpHeader->checksum);
-    const uint8_t* const padData = data + icmpHeaderSize + icmpDataSize; // potential padding
-    const size_t padDataSize = size - icmpHeaderSize - icmpDataSize;     // potential padding
+    // const uint8_t* const padData = data + icmpHeaderSize + icmpDataSize; // potential padding
+    const size_t padDataSize = size - icmpHeaderSize - icmpDataSize; // potential padding
 
-    char buffer[100];
+    const uint16_t icmpCheckCalc = sock::util::inet_checksum(data, icmpHeaderSize + icmpDataSize);
 
-    printf(SGR_ICMP);
+    if (icmpType != ICMP_ECHO)
+    {
+        char buffer[100];
 
-    printf("ICMP from %s\n", sock::util::inaddrtos(saddr).c_str());
-    printf("  type      %i %s\n", (int)icmpType, sock::util::icmpttos(icmpType).c_str());
-    printf("  code      %i %s\n", (int)icmpCode, sock::util::icmpctos(icmpType, icmpCode).c_str());
-    printf("  check     %s0x%04x" SGR_ICMP "\n", ((icmpCheckCalc == 0) ? "" : SGR_RED), (int)icmpCheck);
-    printf("  hdr size  %zu\n", icmpHeaderSize);
-    printf("  data size %zu + %zu pad\n", icmpDataSize, padDataSize);
+        printf(SGR_ICMP);
 
-    printf(SGR_DEFAULT);
-    fflush(stdout);
+        printf("ICMP from %s\n", sock::util::inaddrtos(saddr).c_str());
+        printf("  type      %i %s\n", (int)icmpType, sock::util::icmpttos(icmpType).c_str());
+        printf("  code      %i %s\n", (int)icmpCode, sock::util::icmpctos(icmpType, icmpCode).c_str());
+        printf("  check     %s0x%04x" SGR_ICMP "\n", ((icmpCheckCalc == 0) ? "" : SGR_RED), (int)icmpCheck);
+        printf("  hdr size  %zu\n", icmpHeaderSize);
+        printf("  data size %zu + %zu pad\n", icmpDataSize, padDataSize);
 
+        if (((icmpType == ICMP_DEST_UNREACH) || (icmpType == ICMP_TIME_EXCEEDED)) && (icmpDataSize >= sizeof(struct iphdr)))
+        {
+            const struct iphdr* const ipHeader = (const struct iphdr*)(icmpData);
+            // const uint8_t ipVersion = ipHeader->version;
+            const uint8_t ipIhl = ipHeader->ihl;
+            const size_t ipHeaderSize = ipIhl * 4u;
+            // const uint8_t ipTos = ipHeader->tos;
+            // const uint16_t ipTotalLen = ntohs(ipHeader->tot_len);
+            // const uint16_t ipId = ntohs(ipHeader->id);
+            // const uint8_t ipFlags = (uint8_t)(ntohs(ipHeader->frag_off) >> 13);
+            // const uint16_t ipFragOff = (ntohs(ipHeader->frag_off) & 0x1FFF);
+            const uint8_t ipTtl = ipHeader->ttl;
+            const uint8_t ipProtocol = ipHeader->protocol;
+            const uint16_t ipCheck = ntohs(ipHeader->check);
+            // const uint32_t srcIp = ntohl(ipHeader->saddr);
+            // const uint32_t dstIp = ntohl(ipHeader->daddr);
+            // const size_t ipDataSize = size - ipHeaderSize;
+
+            const uint16_t ipCheckCalc = sock::util::inet_checksum(icmpData, ipHeaderSize);
+
+            printf(SGR_ICMP_ERR);
+            printf("  original packet:\n");
+            printf("    TTL       %i\n", (int)ipTtl);
+            printf("    protocol  %02x %s\n", ipProtocol, sock::util::ipptos(ipProtocol).c_str());
+            printf("    check     %s0x%04x" SGR_ICMP_ERR "\n", ((ipCheckCalc == 0) ? "" : SGR_RED), (int)ipCheck);
+            printf("    src addr  %s\n", inet_ntop(AF_INET, &(ipHeader->saddr), buffer, sizeof(buffer)));
+            printf("    dst addr  %s\n", inet_ntop(AF_INET, &(ipHeader->daddr), buffer, sizeof(buffer)));
+        }
+
+        printf(SGR_DEFAULT);
+        fflush(stdout);
+    }
 #endif // PRJ_DEBUG
 
 
 
     if (icmpType == ICMP_ECHOREPLY)
     {
+#if 0 // it seems to be common for echo replies to not calculate the checksum
         if (!checksumOk)
         {
             const struct sockaddr_in tmp = {
@@ -443,8 +507,18 @@ static void handlePacket_icmp(const struct in_addr* saddr, const uint8_t* data, 
 
             cli::printWarning("invalid IP checksum for echo reply from " + sock::util::sockaddrtos(&tmp));
         }
+#endif
+        sd.pushResolution(Resolution(Resolution::Type::ECHO, saddr));
+    }
+    else if (((icmpType == ICMP_DEST_UNREACH) || (icmpType == ICMP_TIME_EXCEEDED)) && (icmpDataSize >= sizeof(struct iphdr)))
+    {
+        const struct iphdr* const ipHeader = (const struct iphdr*)(icmpData);
+        const uint8_t ipProtocol = ipHeader->protocol;
+        const in_addr tmpAddr = {
+            .s_addr = ipHeader->daddr,
+        };
 
-        sd.pushResolution(Resolution(mac::EUI48(), saddr));
+        if (ipProtocol == IPPROTO_ICMP) { sd.pushResolution(Resolution(Resolution::Type::unreach, &tmpAddr)); }
     }
 }
 
@@ -477,15 +551,18 @@ void thread()
             const int err = close(sockfd);
             if (err)
             {
-                cli::printErrno("sniffer close() failed", errno);
+                cli::printErrno("sniffer close socket failed", errno);
                 sd.setError(__LINE__);
             }
             else { sd.setError(__LINE__); }
 
             sd.shutdown();
         }
-        else
+        else if (sockDataSize >= 42)
         {
+            // min ARP packet size: ETH_HDR + ARP_PACKET = 14 + 28 = 42
+            // min ICMP packet size: ETH_HDR + IP_HDR + ICMP_HDR = 14 + 20 + 8 = 42
+
             const struct ethhdr* const ethHeader = (const struct ethhdr*)(sockData);
             const uint16_t ethProtocol = ntohs(ethHeader->h_proto);
             const size_t ethHeaderSize = ((ethProtocol == ETH_P_8021Q) ? (ETH_HLEN + 4) : (ETH_HLEN));
@@ -510,7 +587,7 @@ void thread()
 
 
     errno = 0;
-    if (close(sockfd) != 0) { cli::printErrno("close socket failed", errno); }
+    if (close(sockfd) != 0) { cli::printErrno("sniffer close socket failed", errno); }
 }
 
 } // namespace sniffer

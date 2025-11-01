@@ -4,7 +4,7 @@ List IP devices.
 
 ```text
 Usage:
-  lsip [options] ADDR [ADDR [ADDR [...]]]
+  lsip [options] [ADDR [ADDR [...]]]
 
 ADDR:
   IPv4 address range to scan, specified by subnet mask or range:

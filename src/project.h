@@ -19,7 +19,7 @@ const char* const dirName = "lsip";
 
 const char* const website = "https://github.com/oblaser/lsip";
 
-const omw::Version version(1, 0, 0, "");
+const omw::Version version(1, 0, 1, "alpha");
 constexpr int copyrightYear = 2025;
 
 } // namespace prj

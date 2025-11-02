@@ -30,7 +30,7 @@ const ip::Addr4 ip::Addr4::broadcast = ip::Addr4(255, 255, 255, 255);
 
 void ip::Addr4::set(const std::string& str) noexcept(false)
 {
-    constexpr std::string_view fnName = "ip::Addr4::set";
+    const char* const fnName = "ip::Addr4::set";
 
     const auto tokens = omw::split(str, '.');
 
@@ -42,9 +42,9 @@ void ip::Addr4::set(const std::string& str) noexcept(false)
         const int lo = std::stoi(tokens[3]);
 
         if ((hi <= UINT8_MAX) && (mh <= UINT8_MAX) && (ml <= UINT8_MAX) && (lo <= UINT8_MAX)) { this->set(hi, mh, ml, lo); }
-        else { throw std::out_of_range(fnName.data()); }
+        else { throw std::out_of_range(fnName); }
     }
-    else { throw std::invalid_argument(fnName.data()); }
+    else { throw std::invalid_argument(fnName); }
 }
 
 
@@ -54,7 +54,7 @@ const ip::SubnetMask4 ip::SubnetMask4::max = ip::SubnetMask4(ip::Addr4::bit_coun
 
 void ip::SubnetMask4::set(const std::string& str) noexcept(false)
 {
-    constexpr std::string_view fnName = "ip::SubnetMask4::set";
+    const char* const fnName = "ip::SubnetMask4::set";
 
     const size_t slashPos = str.find('/');
 
@@ -65,17 +65,17 @@ void ip::SubnetMask4::set(const std::string& str) noexcept(false)
         {
             try
             {
-                const Addr4 ip = str.substr(0, slashPos);
+                const Addr4 ip(str.substr(0, slashPos));
                 ___ip_addr_setDummy(ip.value());
             }
             catch (const std::invalid_argument& ex)
             {
-                if (omw::contains(ex.what(), "ip::")) { throw std::invalid_argument(fnName.data()); }
+                if (omw::contains(ex.what(), "ip::")) { throw std::invalid_argument(fnName); }
                 else { throw ex; }
             }
             catch (const std::out_of_range& ex)
             {
-                if (omw::contains(ex.what(), "ip::")) { throw std::out_of_range(fnName.data()); }
+                if (omw::contains(ex.what(), "ip::")) { throw std::out_of_range(fnName); }
                 else { throw ex; }
             }
             // other exceptions are not handled here
@@ -88,7 +88,7 @@ void ip::SubnetMask4::set(const std::string& str) noexcept(false)
             const int prefixSize = std::stoi(prefixSizeStr);
             this->setPrefixSize(prefixSize);
         }
-        else { throw std::invalid_argument(fnName.data()); }
+        else { throw std::invalid_argument(fnName); }
     }
     else { Addr4::set(str); }
 
@@ -97,14 +97,14 @@ void ip::SubnetMask4::set(const std::string& str) noexcept(false)
 
 void ip::SubnetMask4::setPrefixSize(int size)
 {
-    constexpr std::string_view fnName = "ip::SubnetMask4::setPrefixSize";
+    const char* const fnName = "ip::SubnetMask4::setPrefixSize";
 
     constexpr int max = (int)bit_count;
 
     if ((size > 0) && (size < max)) { m_value = ~(((value_type)1 << (max - size)) - 1); }
     else if (size == 0) { m_value = 0; }
     else if (size == max) { m_value = 0xFFFFFFFF; }
-    else { throw std::out_of_range(fnName.data()); }
+    else { throw std::out_of_range(fnName); }
 }
 
 uint8_t ip::SubnetMask4::prefixSize() const
@@ -127,7 +127,7 @@ uint8_t ip::SubnetMask4::prefixSize() const
 
 void ip::SubnetMask4::check() const noexcept(false)
 {
-    constexpr std::string_view fnName = "ip::SubnetMask4::check";
+    const char* const fnName = "ip::SubnetMask4::check";
 
     bool hostIdentifier = false;
 
@@ -138,7 +138,7 @@ void ip::SubnetMask4::check() const noexcept(false)
     {
         if (m_value & mask)
         {
-            if (hostIdentifier) { throw std::invalid_argument(fnName.data()); }
+            if (hostIdentifier) { throw std::invalid_argument(fnName); }
         }
         else { hostIdentifier = true; }
 

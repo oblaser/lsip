@@ -46,13 +46,13 @@ public:
         : m_value(addr)
     {}
 
-    Addr4(const char* str) noexcept(false)
+    explicit Addr4(const char* str) noexcept(false)
         : m_value(0)
     {
         this->set(str);
     }
 
-    Addr4(const std::string& str) noexcept(false)
+    explicit Addr4(const std::string& str) noexcept(false)
         : m_value(0)
     {
         this->set(str);
@@ -148,14 +148,14 @@ public:
         this->check();
     }
 
-    SubnetMask4(const char* str) noexcept(false)
+    explicit SubnetMask4(const char* str) noexcept(false)
         : Addr4()
     {
         this->set(str);
         this->check();
     }
 
-    SubnetMask4(const std::string& str) noexcept(false)
+    explicit SubnetMask4(const std::string& str) noexcept(false)
         : Addr4()
     {
         this->set(str);

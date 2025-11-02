@@ -264,12 +264,12 @@ int getRange(std::vector<ip::Addr4>& range, const std::string& argAddrRange)
     try
     {
         // parse subnet mask
-        if (slashPos != std::string::npos) { mask = argAddrRange.substr(slashPos); }
+        if (slashPos != std::string::npos) { mask.set(argAddrRange.substr(slashPos)); }
 
         // parse range
         if (hyphenPos != std::string::npos)
         {
-            start = argAddrRange.substr(0, hyphenPos);
+            start.set(argAddrRange.substr(0, hyphenPos));
 
 
             const size_t endStrPos = hyphenPos + 1;
@@ -306,7 +306,7 @@ int getRange(std::vector<ip::Addr4>& range, const std::string& argAddrRange)
         }
         else
         {
-            start = argAddrRange.substr(0, slashPos);
+            start.set(argAddrRange.substr(0, slashPos));
 
             // if no subnet mask is set and the last octet is 0, assume /24 subnet mask (does not catch all cases, but the most common)
             if ((mask == ip::SubnetMask4::max) && (start.octetLow() == 0))

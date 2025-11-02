@@ -213,3 +213,23 @@ std::vector<std::string> interfaces::getArgIpRanges()
 
     return ranges;
 }
+
+int interfaces::findInterface(const mwip::Addr4& addr)
+{
+    std::vector<IfAddr4> ifAddrs;
+    int err = getIfAddrs(ifAddrs);
+    if (err) { return -(__LINE__); }
+
+    err = 1;
+    for (const auto& ifa : ifAddrs)
+    {
+        // `addr` is in the same subnet as the interface
+        if (((ifa.addr ^ addr) & ifa.mask) == mwip::Addr4::null)
+        {
+            err = 0;
+            break;
+        }
+    }
+
+    return err;
+}

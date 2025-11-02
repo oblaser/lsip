@@ -10,6 +10,7 @@ copyright       GPL-3.0 - Copyright (c) 2025 Oliver Blaser
 #include "application/result.h"
 #include "application/vendor-lookup.h"
 #include "middleware/cli.h"
+#include "middleware/interfaces.h"
 #include "middleware/ip-addr.h"
 #include "middleware/mac-addr.h"
 #include "project.h"
@@ -30,11 +31,7 @@ static app::ScanResult impl_scan(const ip::Addr4& addr);
 
 
 
-app::ScanResult app::scan(const ip::Addr4& addr)
-{
-    const app::ScanResult r = impl_scan(addr);
-    return r;
-}
+app::ScanResult app::scan(const ip::Addr4& addr) { return impl_scan(addr); }
 
 
 
@@ -101,11 +98,25 @@ app::ScanResult impl_scan(const ip::Addr4& addr)
 #pragma comment(lib, "ws2_32.lib")
 // clang-format on
 
+static app::ScanResult scanArp(const ip::Addr4& addr);
+static app::ScanResult scanIcmp(const ip::Addr4& addr);
 static IN_ADDR ip_to_IN_ADDR(const ip::Addr4& addr);
 static inline IPAddr ip_to_IPAddr(const ip::Addr4& addr) { return ip_to_IN_ADDR(addr).S_un.S_addr; }
 static std::string arpres_to_string(DWORD arp_res);
 
 app::ScanResult impl_scan(const ip::Addr4& addr)
+{
+    app::ScanResult r;
+
+    const int err = interfaces::findInterface(addr);
+    if (err == 1) { r = scanIcmp(addr); }
+    else if (err == 0) { r = scanArp(addr); }
+    // else nop, error printed by `findInterface()`
+
+    return r;
+}
+
+app::ScanResult scanArp(const ip::Addr4& addr)
 {
     app::ScanResult r;
 
@@ -145,6 +156,15 @@ app::ScanResult impl_scan(const ip::Addr4& addr)
         }
     }
 
+    return r;
+}
+
+app::ScanResult scanIcmp(const ip::Addr4& addr)
+{
+    app::ScanResult r;
+
+    cli::printError("TODO implement " + std::string(__FUNCTION__));
+    
     return r;
 }
 

@@ -87,10 +87,11 @@ app::ScanResult impl_scan(const ip::Addr4& addr)
 
 // clang-format off
 // #define WIN32_LEAN_AND_MEAN
-#include <winsock2.h>
-#include <Mstcpip.h>
+#include <WinSock2.h>
+#include <mstcpip.h>
 #include <ip2string.h>
 #include <iphlpapi.h>
+#include <IcmpAPI.h>
 #include <Windows.h>
 
 #pragma comment(lib, "iphlpapi.lib")
@@ -163,8 +164,40 @@ app::ScanResult scanIcmp(const ip::Addr4& addr)
 {
     app::ScanResult r;
 
-    cli::printError("TODO implement " + std::string(__FUNCTION__));
-    
+    const IPAddr ipaddr = inet_addr(addr.toString().c_str());
+    if (ipaddr == INADDR_NONE) { cli::printError("failed to convert IP address " + addr.toString()); }
+    else
+    {
+        HANDLE icmpFileHandle = IcmpCreateFile();
+        if (icmpFileHandle == INVALID_HANDLE_VALUE) { cli::printError("IcmpCreateFile() returned " + std::to_string(GetLastError())); }
+        else
+        {
+            uint8_t reqData[1] = { 0 };
+            constexpr DWORD replyBufferSize = sizeof(ICMP_ECHO_REPLY) +  //
+                                              max(sizeof(reqData), 50) + // optional reply data
+                                              20;                        // in case of an ICMP error a full IP header has to fit in here
+            uint8_t replyBuffer[replyBufferSize];
+
+            const DWORD err = IcmpSendEcho(icmpFileHandle, ipaddr, reqData, sizeof(reqData), NULL, replyBuffer, replyBufferSize, 30 * 1000);
+            if (err != 0)
+            {
+                const ICMP_ECHO_REPLY* const reply = (ICMP_ECHO_REPLY*)replyBuffer;
+                const ip::Addr4 srcAddr(ntohl(reply->Address));
+
+                if (reply->Status == IP_SUCCESS)
+                {
+                    if (srcAddr != addr) { cli::printWarning("echo request sent to " + addr.toString() + ", reply received from " + srcAddr.toString()); }
+
+                    const auto mac = mac::EUI48::null;
+                    r = app::ScanResult(addr, mac, (uint32_t)(reply->RoundTripTime), app::lookupVendor(mac));
+                }
+            }
+            else { cli::printError("IcmpSendEcho() returned " + std::to_string(GetLastError())); }
+
+            IcmpCloseHandle(icmpFileHandle);
+        }
+    }
+
     return r;
 }
 

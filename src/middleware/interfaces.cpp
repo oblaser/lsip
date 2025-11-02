@@ -123,17 +123,17 @@ static int getIfAddrs(std::vector<IfAddr4>& ifAddrs)
 
 #else // OMW_PLAT_WIN
 
-std::vector<std::string> ___getIfIpRanges()
+static int getIfAddrs(std::vector<IfAddr4>& ifAddrs)
 {
-    std::vector<std::string> ranges;
-
     struct ifaddrs* iflist = NULL;
 
     if (getifaddrs(&iflist) != 0)
     {
         cli::printErrno("failed to get network interfaces", errno);
-        return std::vector<std::string>();
+        return -(__LINE__);
     }
+
+    ifAddrs.clear();
 
     const struct ifaddrs* ifa = iflist;
     while (ifa)
@@ -147,6 +147,8 @@ std::vector<std::string> ___getIfIpRanges()
 
             const auto addr = mwip::Addr4(ntohl(sa_addr->sin_addr.s_addr));
             const auto mask = mwip::SubnetMask4(mwip::Addr4(ntohl(sa_mask->sin_addr.s_addr)));
+
+            ifAddrs.push_back(IfAddr4(addr, mask));
         }
 
 #if PRJ_DEBUG && 0
@@ -169,7 +171,7 @@ std::vector<std::string> ___getIfIpRanges()
 
     freeifaddrs(iflist);
 
-    return ranges;
+    return 0;
 }
 
 #endif // OMW_PLAT_WIN

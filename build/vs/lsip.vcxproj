@@ -131,6 +131,7 @@
     <ClCompile Include="..\..\src\application\vendor-lookup.cpp" />
     <ClCompile Include="..\..\src\main.cpp" />
     <ClCompile Include="..\..\src\middleware\cli.cpp" />
+    <ClCompile Include="..\..\src\middleware\interfaces.cpp" />
     <ClCompile Include="..\..\src\middleware\ip-addr.cpp" />
     <ClCompile Include="..\..\src\middleware\mac-addr.cpp" />
   </ItemGroup>
@@ -141,6 +142,7 @@
     <ClInclude Include="..\..\src\application\vendor-cache.h" />
     <ClInclude Include="..\..\src\application\vendor-lookup.h" />
     <ClInclude Include="..\..\src\middleware\cli.h" />
+    <ClInclude Include="..\..\src\middleware\interfaces.h" />
     <ClInclude Include="..\..\src\middleware\ip-addr.h" />
     <ClInclude Include="..\..\src\middleware\mac-addr.h" />
     <ClInclude Include="..\..\src\project.h" />

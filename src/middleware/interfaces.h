@@ -11,12 +11,16 @@ copyright       GPL-3.0 - Copyright (c) 2025 Oliver Blaser
 #include <vector>
 
 
+namespace interfaces {
+
 /**
  * @brief Get IP ranges of all interfaces.
  *
  * @return Formatted as cli arg strings
  */
-std::vector<std::string> getIfIpRanges();
+std::vector<std::string> getArgIpRanges();
+
+}
 
 
 #endif // IG_MIDDLEWARE_INTERFACES_H

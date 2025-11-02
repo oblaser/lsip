@@ -242,7 +242,14 @@ int main(int argc, char** argv)
 
                 if (!processedArgIpRange)
                 {
-                    const auto ranges = getIfIpRanges();
+                    const auto ranges = interfaces::getArgIpRanges();
+
+                    if (/* TODO cli option */ ranges.size() > 1)
+                    {
+                        cout << "detected ranges:" << endl;
+                        for (size_t i = 0; i < ranges.size(); ++i) { cout << "  " << std::left << setw(15) << ranges[i] << endl; }
+                        cout << endl;
+                    }
 
                     for (size_t i = 0; i < ranges.size(); ++i)
                     {

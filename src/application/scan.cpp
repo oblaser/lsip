@@ -160,6 +160,14 @@ app::ScanResult scanArp(const ip::Addr4& addr)
     return r;
 }
 
+static void fillReqPayloadDataBuffer(uint8_t* buffer, size_t count)
+{
+    const char a[] = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+    const size_t n = sizeof(a) - 1;
+
+    for (size_t i = 0; i < count; ++i) { buffer[i] = (uint8_t)a[i % n]; }
+}
+
 app::ScanResult scanIcmp(const ip::Addr4& addr)
 {
     app::ScanResult r;
@@ -172,14 +180,16 @@ app::ScanResult scanIcmp(const ip::Addr4& addr)
         if (icmpFileHandle == INVALID_HANDLE_VALUE) { cli::printError("IcmpCreateFile() returned " + std::to_string(GetLastError())); }
         else
         {
-            uint8_t reqData[1] = { 0 };
+            uint8_t reqData[32];
+            fillReqPayloadDataBuffer(reqData, sizeof(reqData));
+
             constexpr DWORD replyBufferSize = sizeof(ICMP_ECHO_REPLY) +  //
                                               max(sizeof(reqData), 50) + // optional reply data
                                               20;                        // in case of an ICMP error a full IP header has to fit in here
             uint8_t replyBuffer[replyBufferSize];
 
-            const DWORD err = IcmpSendEcho(icmpFileHandle, ipaddr, reqData, sizeof(reqData), NULL, replyBuffer, replyBufferSize, 30 * 1000);
-            if (err != 0)
+            const DWORD nOfReply = IcmpSendEcho(icmpFileHandle, ipaddr, reqData, sizeof(reqData), NULL, replyBuffer, replyBufferSize, 30 * 1000);
+            if (nOfReply != 0)
             {
                 const ICMP_ECHO_REPLY* const reply = (ICMP_ECHO_REPLY*)replyBuffer;
                 const ip::Addr4 srcAddr(ntohl(reply->Address));
@@ -192,7 +202,24 @@ app::ScanResult scanIcmp(const ip::Addr4& addr)
                     r = app::ScanResult(addr, mac, (uint32_t)(reply->RoundTripTime), app::lookupVendor(mac));
                 }
             }
-            else { cli::printError("IcmpSendEcho() returned " + std::to_string(GetLastError())); }
+            else
+            {
+                // error:    IcmpSendEcho() returned 11010
+                //
+                // https://stackoverflow.com/questions/9368256/what-would-cause-icmpsendecho-to-fail-when-ping-exe-succeeds
+                // https://stackoverflow.com/questions/23374710/icmpsendecho2-fails-with-fails-with-wsa-qos-admission-failure-and-error-noaccess
+                // https://microsoft.public.windowsce.embedded.narkive.com/odS4vO0P/ping-gives-transmit-error-code-11010
+
+                const DWORD lerr = GetLastError();
+                const DWORD werr = (DWORD)WSAGetLastError();
+
+                if ((lerr == werr) && (lerr == 11010))
+                {
+                    // using payload of 32 and 100 didn't help, so it seems SO q23374710 is right and it indicates timeout
+                    (void)0; // nop
+                }
+                else { cli::printError("IcmpSendEcho() lerr: " + std::to_string(lerr) + ", werr: " + std::to_string(werr)); }
+            }
 
             IcmpCloseHandle(icmpFileHandle);
         }

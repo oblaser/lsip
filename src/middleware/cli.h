@@ -18,7 +18,7 @@ namespace cli {
 
 void printError(const std::string& str, const char* const exWhat = nullptr);
 void printErrno(const std::string& str, int eno);
-void printWarning(const std::string& str);
+void printWarning(const std::string& str, const char* const exWhat = nullptr);
 
 void hexDump(const uint8_t* data, size_t count);
 static inline void hexDump(const std::vector<uint8_t>& data) { hexDump(data.data(), data.size()); }

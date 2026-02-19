@@ -182,11 +182,11 @@ void app::cache::load()
             }
             catch (const std::exception& ex)
             {
-                cli::printError("failed to create directory \"" + parentpath.u8string() + "\"", ex.what());
+                cli::printWarning("failed to create directory \"" + parentpath.u8string() + "\"", ex.what());
             }
             catch (...)
             {
-                cli::printError("failed to create directory \"" + parentpath.u8string() + "\"");
+                cli::printWarning("failed to create directory \"" + parentpath.u8string() + "\"");
             }
         }
     }
@@ -413,7 +413,12 @@ fs::path getFilePath()
             else if (fs::exists(basePath_b)) { path = filePath_b; }
             else { path = fallback; }
         }
-    }
+
+#if PRJ_DEBUG && 0
+        path = fs::path("/00/") / dirname / filename;
+        cli::printWarning("using cache \"" + path.u8string() + "\"");
+#endif
+    } // if empty
 
     return path;
 }

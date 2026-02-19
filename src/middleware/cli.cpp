@@ -48,9 +48,12 @@ void cli::printErrno(const std::string& str, int eno)
     std::cout << std::endl;
 }
 
-void cli::printWarning(const std::string& str)
+void cli::printWarning(const std::string& str, const char* const exWhat)
 {
     std::cout << omw::fgBrightYellow << std::left << std::setw(ewiWidth) << "warning:" << omw::fgDefault;
+
+    if (exWhat) { std::cout << omw::fgBrightBlack << exWhat << omw::fgDefault << " "; }
+
     std::cout << str; // printFormattedText(str);
     std::cout << std::endl;
 }

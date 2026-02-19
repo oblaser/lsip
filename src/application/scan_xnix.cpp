@@ -515,7 +515,7 @@ static void handlePacket_icmp(const struct in_addr* saddr, const uint8_t* data, 
         const struct iphdr* const ipHeader = (const struct iphdr*)(icmpData);
         const uint8_t ipProtocol = ipHeader->protocol;
         const in_addr tmpAddr = {
-            .s_addr = ipHeader->daddr,
+            .s_addr = (in_addr_t)(ipHeader->daddr),
         };
 
         if (ipProtocol == IPPROTO_ICMP) { sd.pushResolution(Resolution(Resolution::Type::unreach, &tmpAddr)); }
@@ -573,7 +573,7 @@ void thread()
             const uint8_t ipIhl = ipHeader->ihl;
             const size_t ipHeaderSize = ipIhl * 4u;
             const uint8_t ipProtocol = ipHeader->protocol;
-            const struct in_addr saddr = { .s_addr = ipHeader->saddr };
+            const struct in_addr saddr = { .s_addr = (in_addr_t)(ipHeader->saddr) };
             const uint8_t* const ipData = ethData + ipHeaderSize;
             const size_t ipDataSize = ethDataSize - ipHeaderSize;
 

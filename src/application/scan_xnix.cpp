@@ -62,8 +62,8 @@ public:
     {
         null,
         unreach, // special value so that the scanner does not need to wait for it's full timeout duration
-        ARP,
-        ECHO,
+        arp,
+        echo,
     };
 
 public:
@@ -72,7 +72,7 @@ public:
     {}
 
     Resolution(const mac::EUI48& _mac, const struct in_addr* _ip)
-        : type(Type::ARP), mac(_mac), ip{ .s_addr = 0 }
+        : type(Type::arp), mac(_mac), ip{ .s_addr = 0 }
     {
         if (_ip) { this->ip.s_addr = _ip->s_addr; }
     }
@@ -222,8 +222,8 @@ int impl_scan_xnix(const char* addrStr, uint8_t* macBuffer)
             // nop, no resolution for the requested IP adderss available
             break;
 
-        case sniffer::Resolution::Type::ARP:
-        case sniffer::Resolution::Type::ECHO:
+        case sniffer::Resolution::Type::arp:
+        case sniffer::Resolution::Type::echo:
             for (size_t i = 0; i < res.mac.size(); ++i) { macBuffer[i] = res.mac[i]; }
             r = 0;
             done = true;
@@ -508,14 +508,14 @@ static void handlePacket_icmp(const struct in_addr* saddr, const uint8_t* data, 
             cli::printWarning("invalid IP checksum for echo reply from " + sock::util::sockaddrtos(&tmp));
         }
 #endif
-        sd.pushResolution(Resolution(Resolution::Type::ECHO, saddr));
+        sd.pushResolution(Resolution(Resolution::Type::echo, saddr));
     }
     else if (((icmpType == ICMP_DEST_UNREACH) || (icmpType == ICMP_TIME_EXCEEDED)) && (icmpDataSize >= sizeof(struct iphdr)))
     {
         const struct iphdr* const ipHeader = (const struct iphdr*)(icmpData);
         const uint8_t ipProtocol = ipHeader->protocol;
         const in_addr tmpAddr = {
-            .s_addr = ipHeader->daddr,
+            .s_addr = (in_addr_t)(ipHeader->daddr),
         };
 
         if (ipProtocol == IPPROTO_ICMP) { sd.pushResolution(Resolution(Resolution::Type::unreach, &tmpAddr)); }
@@ -573,7 +573,7 @@ void thread()
             const uint8_t ipIhl = ipHeader->ihl;
             const size_t ipHeaderSize = ipIhl * 4u;
             const uint8_t ipProtocol = ipHeader->protocol;
-            const struct in_addr saddr = { .s_addr = ipHeader->saddr };
+            const struct in_addr saddr = { .s_addr = (in_addr_t)(ipHeader->saddr) };
             const uint8_t* const ipData = ethData + ipHeaderSize;
             const size_t ipDataSize = ethDataSize - ipHeaderSize;
 

@@ -172,6 +172,7 @@ omw::Color getVendorColour(const std::string& name)
 
     if (omw::contains(lower, "raspberry pi")) { c = 0xc51a4a; }
     else if (omw::contains(lower, "hach lange")) { c = 0x0098db; }
+    else if (omw::contains(lower, "stmicroelectronics") || omw::contains(lower, "stmicrolectronics")) { c = 0x0094d1; }
     else { c = 0; }
 
     return c;

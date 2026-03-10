@@ -42,10 +42,14 @@ app::Vendor app::lookupVendor(const mac::Addr& mac)
 
     if (vendor.empty())
     {
-        const auto tmp = onlineLookup(mac);
-        if (!tmp.empty()) { app::cache::add(mac, tmp); }
+        // do only look up online if MAC is not local or if it's a CID
+        if (!mac.isLocal() || mac.isCID())
+        {
+            const auto tmp = onlineLookup(mac);
+            if (!tmp.empty()) { app::cache::add(mac, tmp); }
 
-        vendor = app::Vendor(app::Vendor::Source::api, tmp.name(), getVendorColour(tmp.name()));
+            vendor = app::Vendor(app::Vendor::Source::api, tmp.name(), getVendorColour(tmp.name()));
+        }
     }
 
     return vendor;

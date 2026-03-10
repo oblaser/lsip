@@ -225,25 +225,35 @@ void printResult(const app::ScanResult& result)
 
     ss << "  " << std::right << std::setw(4) << result.duration() << "ms";
 
-    const auto& vendor = result.vendor();
-    if (!vendor.empty() /* && TODO cli option */)
+    if (true /* TODO cli option */)
     {
         ss << "  ";
 
-        if (/* TODO cli option */
-#if PRJ_DEBUG && 0
-            true
-#else
-            false
-#endif
-        )
+        const auto& vendor = result.vendor();
+        if (!vendor.empty())
         {
-            ss << omw::fgBrightBlack << '[' << vendor.source() << ']' << omw::fgDefault << ' ';
+            if (/* TODO cli option */
+#if PRJ_DEBUG && 0
+                true
+#else
+                false
+#endif
+            )
+            {
+                ss << omw::fgBrightBlack << '[' << vendor.source() << ']' << omw::fgDefault << ' ';
+            }
+
+            if (vendor.hasColour()) { ss << omw::foreColor(vendor.colour()); }
+
+            ss << vendor.name();
+        }
+        else
+        {
+            const auto& mac = result.mac();
+            if (mac.isLocal()) { ss << omw::fgBrightBlack << "local"; }
+            if (mac.isCID()) { ss << omw::fgBrightYellow << " CID"; }
         }
 
-        if (vendor.hasColour()) { ss << omw::foreColor(vendor.colour()); }
-
-        ss << vendor.name();
         ss << omw::fgDefault;
     }
 

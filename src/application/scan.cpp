@@ -213,9 +213,9 @@ app::ScanResult scanIcmp(const ip::Addr4& addr)
                 const DWORD lerr = GetLastError();
                 const DWORD werr = (DWORD)WSAGetLastError();
 
-                if ((lerr == werr) && (lerr == 11010))
+                if ((lerr == werr) && (lerr == 11010)) // WSA_QOS_ADMISSION_FAILURE
                 {
-                    // using payload of 32 and 100 didn't help, so it seems SO q23374710 is right and it indicates timeout
+                    // using payload of 32 and 100 didn't help, so it seems SO/q23374710 is right and it indicates timeout
                     (void)0; // nop
                 }
                 else { cli::printError("IcmpSendEcho() lerr: " + std::to_string(lerr) + ", werr: " + std::to_string(werr)); }

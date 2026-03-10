@@ -4,6 +4,7 @@
 
 ### v1.0.1
 - Handle ICMP echo timeout on Windows
+- Improved display of local MAC addresses
 
 
 
